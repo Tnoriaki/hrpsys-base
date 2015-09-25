@@ -661,8 +661,12 @@ void AutoBalancer::getTargetParameters()
           double alpha = (ref_zmp - ee_pos[1]).norm() / (ee_pos[0] - ee_pos[1]).norm();
           if (alpha>1.0) alpha = 1.0;
           if (alpha<0.0) alpha = 0.0;
+          if (ee_pos[0][2] < 1e-16 && alpha == 0) alpha += 0.5;
+          if (ee_pos[1][2] < 1e-16 && alpha == 1) alpha -= 0.5;
           if (DEBUGP) {
           std::cerr << "[" << m_profile.instance_name << "] alpha:" << alpha << std::endl;
+          std::cerr << "[" << m_profile.instance_name << "] r_ee_pos.x:" << ee_pos[0][0] << " r_ee_pos.y:" << ee_pos[0][1] << " r_ee_pos.z:" << ee_pos[0][2] << std::endl;
+          std::cerr << "[" << m_profile.instance_name << "] l_ee_pos.x:" << ee_pos[0][0] << " l_ee_pos.y:" << ee_pos[0][1] << " l_ee_pos.z:" << ee_pos[0][2] << std::endl;
           }
           double mg = m_robot->totalMass() * gg->get_gravitational_acceleration();
           m_force[0].data[0] = alpha * mg;
