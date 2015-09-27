@@ -219,6 +219,8 @@ module OpenHRP
       double pos_ik_thre;
       /// IK rotation threshold [rad]
       double rot_ik_thre;
+      /// alpha_offset for swing leg
+      double alpha_offset;
     };
 
     /**

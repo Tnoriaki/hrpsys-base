@@ -313,6 +313,7 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
 
     pos_ik_thre = 0.1*1e-3; // [m]
     rot_ik_thre = (1e-2)*M_PI/180.0; // [rad]
+    alpha_offset = 0;
     ik_error_debug_print_freq = static_cast<int>(0.2/m_dt); // once per 0.2 [s]
 
     return RTC::RTC_OK;
@@ -661,16 +662,18 @@ void AutoBalancer::getTargetParameters()
           double alpha = (ref_zmp - ee_pos[1]).norm() / (ee_pos[0] - ee_pos[1]).norm();
           if (alpha>1.0) alpha = 1.0;
           if (alpha<0.0) alpha = 0.0;
-          if (ee_pos[0][2] < 1e-16 && alpha == 0) alpha += 0.5;
-          if (ee_pos[1][2] < 1e-16 && alpha == 1) alpha -= 0.5;
+          if (ee_pos[0][2] + ee_pos[1][2] < 1e-7 && m_contactStates.data[contact_states_index_map["rleg"]] == false){
+              alpha += alpha_offset;
+          }
+          if (ee_pos[0][2] + ee_pos[1][2] < 1e-7 && m_contactStates.data[contact_states_index_map["lleg"]] == false){
+              alpha -= alpha_offset;
+          }
           if (DEBUGP) {
-          std::cerr << "[" << m_profile.instance_name << "] alpha:" << alpha << std::endl;
-          std::cerr << "[" << m_profile.instance_name << "] r_ee_pos.x:" << ee_pos[0][0] << " r_ee_pos.y:" << ee_pos[0][1] << " r_ee_pos.z:" << ee_pos[0][2] << std::endl;
-          std::cerr << "[" << m_profile.instance_name << "] l_ee_pos.x:" << ee_pos[0][0] << " l_ee_pos.y:" << ee_pos[0][1] << " l_ee_pos.z:" << ee_pos[0][2] << std::endl;
+              std::cerr << "[" << m_profile.instance_name << "] alpha:" << alpha << std::endl;
           }
           double mg = m_robot->totalMass() * gg->get_gravitational_acceleration();
-          m_force[0].data[0] = alpha * mg;
-          m_force[1].data[0] = (1-alpha) * mg;
+          m_force[0].data[2] = alpha * mg;
+          m_force[1].data[2] = (1-alpha) * mg;
       }
       // set limbCOPOffset
       {
@@ -1423,6 +1426,7 @@ bool AutoBalancer::setAutoBalancerParam(const OpenHRP::AutoBalancerService::Auto
   }
   pos_ik_thre = i_param.pos_ik_thre;
   rot_ik_thre = i_param.rot_ik_thre;
+  alpha_offset = i_param.alpha_offset;
   std::cerr << "[" << m_profile.instance_name << "]   move_base_gain = " << move_base_gain << std::endl;
   std::cerr << "[" << m_profile.instance_name << "]   default_zmp_offsets = ";
   for (size_t i = 0; i < ikp.size() * 3; i++) {
@@ -1438,6 +1442,7 @@ bool AutoBalancer::setAutoBalancerParam(const OpenHRP::AutoBalancerService::Auto
   std::cerr << "[" << m_profile.instance_name << "]   transition_time = " << transition_time << "[s], zmp_transition_time = " << zmp_transition_time << "[s], adjust_footstep_transition_time = " << adjust_footstep_transition_time << "[s]" << std::endl;
   for (std::vector<std::string>::iterator it = leg_names.begin(); it != leg_names.end(); it++) std::cerr << "[" << m_profile.instance_name << "]   leg_names [" << *it << "]" << std::endl;
   std::cerr << "[" << m_profile.instance_name << "]   pos_ik_thre = " << pos_ik_thre << "[m], rot_ik_thre = " << rot_ik_thre << "[rad]" << std::endl;
+  std::cerr << "[" << m_profile.instance_name << "]   alpha_oofset = " << alpha_offset << "[]" << std::endl;
   return true;
 };
 
@@ -1476,6 +1481,7 @@ bool AutoBalancer::getAutoBalancerParam(OpenHRP::AutoBalancerService::AutoBalanc
   for (size_t i = 0; i < leg_names.size(); i++) i_param.leg_names[i] = leg_names.at(i).c_str();
   i_param.pos_ik_thre = pos_ik_thre;
   i_param.rot_ik_thre = rot_ik_thre;
+  i_param.alpha_offset = alpha_offset;
   return true;
 };
 
