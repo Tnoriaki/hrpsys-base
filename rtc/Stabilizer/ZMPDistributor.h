@@ -299,6 +299,12 @@ public:
     {
         std::vector<double> alpha_vector(2), fz_alpha_vector(2);
         calcAlphaVector(alpha_vector, fz_alpha_vector, ee_pos, ee_rot, ee_name, new_refzmp, ref_zmp);
+        for (int i = 0; i <2; i++){
+            if (ref_foot_force[i][2] > 0 && fz_alpha_vector[i] == 0){
+                fz_alpha_vector[i] = ref_foot_force[i][2] / (ref_foot_force[0][2] + ref_foot_force[1][2]);
+                fz_alpha_vector[(i + 1) % 2] = 1 - fz_alpha_vector[i];
+            }
+        }
         ref_foot_force[0] = hrp::Vector3(0,0, fz_alpha_vector[0] * total_fz);
         ref_foot_force[1] = hrp::Vector3(0,0, fz_alpha_vector[1] * total_fz);
 
