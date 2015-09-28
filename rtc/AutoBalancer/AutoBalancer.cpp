@@ -664,9 +664,11 @@ void AutoBalancer::getTargetParameters()
           if (alpha<0.0) alpha = 0.0;
           if (ee_pos[0][2] + ee_pos[1][2] < 1e-7 && m_contactStates.data[contact_states_index_map["rleg"]] == false){
               alpha += alpha_offset;
+              m_contactStates.data[contact_states_index_map["rleg"]] =true;
           }
           if (ee_pos[0][2] + ee_pos[1][2] < 1e-7 && m_contactStates.data[contact_states_index_map["lleg"]] == false){
               alpha -= alpha_offset;
+              m_contactStates.data[contact_states_index_map["lleg"]] =true;
           }
           if (DEBUGP) {
               std::cerr << "[" << m_profile.instance_name << "] alpha:" << alpha << std::endl;
