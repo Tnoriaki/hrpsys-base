@@ -215,6 +215,9 @@ namespace rats
       case CYCLOIDDELAYKICK:
         cycloid_delay_kick_midcoords(ret, it1->worldcoords, it2->worldcoords, step_height);
         break;
+      case CROSS:
+        cross_delay_midcoords(ret, it1->worldcoords, it2->worldcoords, step_height, it1->l_r);
+        break;
       default: break;
       }
       if (std::fabs(step_height) > 1e-3*10) {
@@ -370,6 +373,14 @@ namespace rats
     cdktg.get_trajectory_point(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height);
   };
 
+  void leg_coords_generator::cross_delay_midcoords (coordinates& ret, const coordinates& start,
+                                                    const coordinates& goal, const double height, leg_type lr)
+  {
+    mid_coords(ret, swing_rot_ratio, start, goal);
+    crdtg.set_swing_leg(lr);
+    crdtg.get_trajectory_point(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height);
+  };
+
   bool leg_coords_generator::is_same_footstep_nodes(const std::vector<step_node>& fns_1, const std::vector<step_node>& fns_2)
   {
       bool matching_flag = true;
@@ -448,10 +459,11 @@ namespace rats
         next_one_step_count = static_cast<size_t>(fnsl[footstep_index+1].front().step_time/dt);
       }
       lcg_count = one_step_count;
-      rdtg.reset(one_step_count, default_double_support_ratio_before);
-      sdtg.reset(one_step_count, default_double_support_ratio_before);
-      cdtg.reset(one_step_count, default_double_support_ratio_before);
-      cdktg.reset(one_step_count, default_double_support_ratio_before);
+      rdtg.reset(one_step_count, default_double_support_ratio_before, default_double_support_ratio_after);
+      sdtg.reset(one_step_count, default_double_support_ratio_before, default_double_support_ratio_after);
+      cdtg.reset(one_step_count, default_double_support_ratio_before, default_double_support_ratio_after);
+      cdktg.reset(one_step_count, default_double_support_ratio_before, default_double_support_ratio_after);
+      crdtg.reset(one_step_count, default_double_support_ratio_before, default_double_support_ratio_after);
       reset_foot_ratio_interpolator();
     }
   };
@@ -482,7 +494,7 @@ namespace rats
     }
     //preview_controller_ptr = new preview_dynamics_filter<preview_control>(dt, cog(2) - refzmp_cur_list[0](2), refzmp_cur_list[0]);
     preview_controller_ptr = new preview_dynamics_filter<extended_preview_control>(dt, cog(2) - rg.get_refzmp_cur()(2), rg.get_refzmp_cur(), gravitational_acceleration);
-    lcg.reset(one_step_len, footstep_nodes_list.at(1).front().step_time/dt, initial_swing_leg_dst_steps, initial_swing_leg_dst_steps, initial_support_leg_steps, default_double_support_ratio_swing_before);
+    lcg.reset(one_step_len, footstep_nodes_list.at(1).front().step_time/dt, initial_swing_leg_dst_steps, initial_swing_leg_dst_steps, initial_support_leg_steps, default_double_support_ratio_swing_before, default_double_support_ratio_swing_after);
     /* make another */
     lcg.set_swing_support_steps_list(footstep_nodes_list);
     for (size_t i = 1; i < footstep_nodes_list.size()-1; i++) {
