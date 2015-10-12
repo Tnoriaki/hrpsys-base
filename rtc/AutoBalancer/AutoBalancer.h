@@ -187,7 +187,7 @@ class AutoBalancer
     hrp::Link* target_link;
     hrp::JointPathExPtr manip;
     size_t pos_ik_error_count, rot_ik_error_count;
-    bool is_active;
+    bool is_active, has_toe_joint;
   };
   void getCurrentParameters();
   void getTargetParameters();
@@ -215,7 +215,7 @@ class AutoBalancer
   ggPtr gg;
   bool gg_is_walking, gg_solved;
   // for abc
-  hrp::Vector3 ref_cog, ref_zmp, prev_imu_sensor_pos, prev_imu_sensor_vel;
+  hrp::Vector3 ref_cog, ref_zmp, prev_imu_sensor_pos, prev_imu_sensor_vel, hand_fix_initial_offset;
   enum {MODE_IDLE, MODE_ABC, MODE_SYNC_TO_IDLE, MODE_SYNC_TO_ABC} control_mode, return_control_mode;
   std::map<std::string, ABCIKparam> ikp;
   std::map<std::string, size_t> contact_states_index_map;
@@ -244,7 +244,7 @@ class AutoBalancer
   std::vector<hrp::Vector3> ref_forces;
 
   unsigned int m_debugLevel;
-  bool is_legged_robot, is_stop_mode, has_ik_failed;
+  bool is_legged_robot, is_stop_mode, has_ik_failed, is_hand_fix_mode, is_hand_fix_initial;
   int loop, ik_error_debug_print_freq;
   bool graspless_manip_mode;
   std::string graspless_manip_arm;

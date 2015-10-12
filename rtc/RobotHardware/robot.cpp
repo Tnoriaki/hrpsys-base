@@ -426,6 +426,11 @@ int robot::readJointTorques(double *o_torques)
     return read_actual_torques(o_torques);
 }
 
+int robot::readJointCommandTorques(double *o_torques)
+{
+    return read_command_torques(o_torques);
+}
+
 void robot::readGyroSensor(unsigned int i_rank, double *o_rates)
 {
     read_gyro_sensor(i_rank, o_rates);
@@ -726,12 +731,20 @@ void robot::readExtraServoState(int id, int *state)
 
 bool robot::readDigitalInput(char *o_din)
 {
+#ifndef NO_DIGITAL_INPUT
     return read_digital_input(o_din);
+#else
+    return false;
+#endif
 }
 
 int robot::lengthDigitalInput()
 {
+#ifndef NO_DIGITAL_INPUT
     return length_digital_input();
+#else
+    return 0;
+#endif
 }
 
 bool robot::writeDigitalOutput(const char *i_dout)

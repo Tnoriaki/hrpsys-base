@@ -95,7 +95,8 @@ module OpenHRP
       RECTANGLE,
       STAIR,
       CYCLOIDDELAY,
-      CYCLOIDDELAYKICK
+      CYCLOIDDELAYKICK,
+      CROSS
     };
 
     /**
@@ -107,6 +108,15 @@ module OpenHRP
       MODE_ABC,
       MODE_SYNC_TO_IDLE,
       MODE_SYNC_TO_ABC
+    };
+
+    /**
+     * @enum UseForceMode
+     * @brief Mode of use_force
+     */
+    enum UseForceMode {
+      MODE_NO_FORCE,
+      MODE_REF_FORCE
     };
 
     /**
@@ -151,6 +161,10 @@ module OpenHRP
       double default_double_support_ratio;
       /// Ratio of double support static period in which reference ZMP does not move. Ratio is included in (0, 1). default_double_support_ratio >= default_double_support_static_ratio..
       double default_double_support_static_ratio;
+      /// Ratio of double support period before swing. Ratio is included in (0, 1).
+      double default_double_support_ratio_swing_before;
+      /// Ratio of double support period after swing. Ratio is included in (0, 1).
+      double default_double_support_ratio_swing_after;
       /// Stride limitation of forward x[m], y[m], theta[deg], and backward x[m] for goPos
       sequence<double, 4> stride_parameter;
       /// Default OrbitType
@@ -201,6 +215,7 @@ module OpenHRP
       sequence<DblSequence3> default_zmp_offsets;
       double move_base_gain;
       ControllerMode controller_mode;
+      UseForceMode use_force_mode;
       boolean graspless_manip_mode;
       string graspless_manip_arm;
       DblArray3 graspless_manip_p_gain;
@@ -221,6 +236,8 @@ module OpenHRP
       double rot_ik_thre;
       /// alpha_offset for swing leg
       double alpha_offset;
+      /// Flag for fix hand while walking.
+      boolean is_hand_fix_mode;
     };
 
     /**
