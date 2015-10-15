@@ -309,7 +309,7 @@ namespace rats
     {
     private:
       hrp::Vector3 pos, vel, acc; // [m], [m/s], [m/s^2]
-      double dt; // [s]
+      //double dt; // [s]
       // Implement hoffarbib to configure remain_time;
       void hoffarbib_interpolation (const double tmp_remain_time, const hrp::Vector3& tmp_goal)
       {
@@ -321,6 +321,7 @@ namespace rats
         pos = pos + dt * vel;
       };
     protected:
+      double dt; // [s]
       double time_offset; // [s]
       double final_distance_weight;
       size_t one_step_count, current_count, double_support_count_before, double_support_count_after; // time/dt
@@ -344,7 +345,11 @@ namespace rats
           size_t swing_remain_count = one_step_count - current_count - double_support_count_after;
           size_t swing_one_step_count = one_step_count - double_support_count_before - double_support_count_after;
           if (swing_remain_count*dt > time_offset) { // antecedent path is still interpolating
+            double before_hegiht = pos(2);
             hoffarbib_interpolation (time_offset, interpolate_antecedent_path(start, goal, height, ((swing_one_step_count - swing_remain_count) / (swing_one_step_count - time_offset/dt))));
+            if(pos(2) - before_hegiht > 0 && before_hegiht == 0){
+                std::cerr<<"take_off_time_real: "<< current_count * dt << std::endl;
+            }
           } else if (swing_remain_count > 0) { // antecedent path already reached to goal
             hoffarbib_interpolation (swing_remain_count*dt, goal);
           } else {
@@ -488,11 +493,13 @@ namespace rats
     private:
       hrp::Matrix33 start_rot;
       hrp::Vector3 kick_point_offset;
+      double take_off_ratio;
     public:
         cycloid_delay_kick_hoffarbib_trajectory_generator() : delay_hoffarbib_trajectory_generator(), kick_point_offset(hrp::Vector3(-0.1, 0.0, 0.0)) {};
       void set_cycloid_delay_kick_point_offset (const hrp::Vector3 _offset) { kick_point_offset = _offset; };
       void set_start_rot (const hrp::Matrix33 _offset) { start_rot = _offset; };
       hrp::Vector3 get_cycloid_delay_kick_point_offset () { return kick_point_offset; };
+      double get_cycloid_delay_kick_take_off_ratio () { return take_off_ratio; };
       hrp::Vector3 interpolate_antecedent_path (const hrp::Vector3& start, const hrp::Vector3& goal, const double height, const double tmp_ratio)
       {
         std::vector<hrp::Vector3> cycloid_path;
@@ -500,25 +507,45 @@ namespace rats
         double ratio = 0.4;
         via_goal(2) += ratio*height;
         double tmpheight = ((start(2)+goal(2))/2.0+height-(start(2)+via_goal(2))/2.0);
+        double sum_length = 0;
+        double take_off_length = 0;
         // kick_point_offset = start_rot * kick_point_offset;
         cycloid_path.push_back(start);
         if(height > 1e-4){
+            take_off_length = (start_rot * kick_point_offset).norm();
             cycloid_path.push_back(start + start_rot * kick_point_offset);
+            sum_length += (cycloid_path[cycloid_path.size()-1] - cycloid_path[cycloid_path.size()-2]).norm();
             cycloid_midpoint(tmpv, 0.2, start + start_rot * kick_point_offset, via_goal, tmpheight);
             cycloid_path.push_back(tmpv);
+            sum_length += (cycloid_path[cycloid_path.size()-1] - cycloid_path[cycloid_path.size()-2]).norm();
             cycloid_midpoint(tmpv, 0.4, start + start_rot * kick_point_offset, via_goal, tmpheight);
             cycloid_path.push_back(tmpv);
+            sum_length += (cycloid_path[cycloid_path.size()-1] - cycloid_path[cycloid_path.size()-2]).norm();
             cycloid_midpoint(tmpv, 0.6, start + start_rot * kick_point_offset, via_goal, tmpheight);
             cycloid_path.push_back(tmpv);
+            sum_length += (cycloid_path[cycloid_path.size()-1] - cycloid_path[cycloid_path.size()-2]).norm();
             cycloid_midpoint(tmpv, 0.8, start + start_rot * kick_point_offset, via_goal, tmpheight);
             cycloid_path.push_back(tmpv);
+            sum_length += (cycloid_path[cycloid_path.size()-1] - cycloid_path[cycloid_path.size()-2]).norm();
         }
         cycloid_path.push_back(via_goal);
+        sum_length += (cycloid_path[cycloid_path.size()-1] - cycloid_path[cycloid_path.size()-2]).norm();
         cycloid_path.push_back(goal);
+        sum_length += (cycloid_path[cycloid_path.size()-1] - cycloid_path[cycloid_path.size()-2]).norm();
+        take_off_ratio = take_off_length / sum_length;
+        if (sum_length == 0) take_off_ratio = 0;
+        take_off_ratio *= (1 - (time_offset / dt) / (one_step_count - double_support_count_after - double_support_count_before));
+        double take_off_time;
+        take_off_time = (take_off_ratio * (one_step_count - double_support_count_after - double_support_count_before) + double_support_count_before) * dt;
+        //std::cerr<<"one_step_time: "<<one_step_count * dt<<std::endl;
+        //std::cerr<<"swing_time: "<<(one_step_count - double_support_count_after - double_support_count_before) * dt<<std::endl;
+        //std::cerr<<"swing_time_before"<<double_support_count_before * dt<<std::endl;
+        //std::cerr<<"take_off_ratio: "<<take_off_ratio<<std::endl;
+        std::cerr<<"take_off_time_predict: "<<take_off_time<<std::endl;
         return interpolate_antecedent_path_base(tmp_ratio, cycloid_path);
       };
     };
-    
+
     class cross_delay_hoffarbib_trajectory_generator : public delay_hoffarbib_trajectory_generator
     {
     private:
