@@ -442,7 +442,7 @@ RTC::ReturnCode_t ImpedanceController::onExecute(RTC::UniqueId ec_id)
 	while(it != m_impedance_param.end()){
             ImpedanceParam& param = it->second;
             if (param.is_active) {
-                if ( loop % 200 == 0 ) {
+                if (DEBUGP) {
                   std::cerr << "[" << m_profile.instance_name << "] impedance mode " << it->first << " transition count = " << param.transition_count << ", ";
                   std::cerr << "MDK = " << param.M_p << " " << param.D_p << " " << param.K_p << ", ";
                   std::cerr << "MDK = " << param.M_r << " " << param.D_r << " " << param.K_r << ", ";
@@ -814,9 +814,27 @@ void ImpedanceController::startObjectTurnaroundDetection(const double i_ref_diff
     }
 }
 
-bool ImpedanceController::checkObjectTurnaroundDetection()
+OpenHRP::ImpedanceControllerService::DetectorMode ImpedanceController::checkObjectTurnaroundDetection()
 {
-    return otd->isDetected();
+    OpenHRP::ImpedanceControllerService::DetectorMode tmpmode;
+    switch (otd->getMode()) {
+    case ObjectTurnaroundDetector::MODE_IDLE:
+        tmpmode = ImpedanceControllerService::MODE_DETECTOR_IDLE;
+        break;
+    case ObjectTurnaroundDetector::MODE_STARTED:
+        tmpmode = ImpedanceControllerService::MODE_STARTED;
+        break;
+    case ObjectTurnaroundDetector::MODE_DETECTED:
+        tmpmode = ImpedanceControllerService::MODE_DETECTED;
+        break;
+    case ObjectTurnaroundDetector::MODE_MAX_TIME:
+        tmpmode = ImpedanceControllerService::MODE_MAX_TIME;
+        break;
+    default:
+        tmpmode = ImpedanceControllerService::MODE_DETECTOR_IDLE;
+        break;
+    }
+    return tmpmode;
 }
 
 bool ImpedanceController::setObjectTurnaroundDetectorParam(const OpenHRP::ImpedanceControllerService::objectTurnaroundDetectorParam &i_param_)

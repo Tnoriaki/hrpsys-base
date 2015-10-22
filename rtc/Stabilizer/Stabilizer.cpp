@@ -284,12 +284,15 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
     eefm_body_attitude_control_gain[i] = 0.5;
     eefm_body_attitude_control_time_const[i] = 1e5;
   }
+#define deg2rad(x) ((x) * M_PI / 180.0)
   for (size_t i = 0; i < stikp.size(); i++) {
       STIKParam& ikp = stikp[i];
       ikp.eefm_rot_damping_gain = hrp::Vector3(20*5, 20*5, 1e5);
       ikp.eefm_rot_time_const = hrp::Vector3(1.5, 1.5, 1.5);
+      ikp.eefm_rot_compensation_limit = deg2rad(10.0);
       ikp.eefm_pos_damping_gain = hrp::Vector3(3500*10, 3500*10, 3500);
       ikp.eefm_pos_time_const_support = hrp::Vector3(1.5, 1.5, 1.5);
+      ikp.eefm_pos_compensation_limit = 0.025;
   }
   eefm_pos_time_const_swing = 0.08;
   eefm_pos_transition_time = 0.01;
@@ -303,7 +306,7 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
   eefm_ee_pos_error_p_gain = 0;
   eefm_ee_rot_error_p_gain = 0;
   cop_check_margin = 20.0*1e-3; // [m]
-  cp_check_margin = 60.0*1e-3; // [m]
+  cp_check_margin = 20.0*1e-3; // [m]
   contact_decision_threshold = 50; // [N]
   eefm_use_force_difference_control = true;
   initial_cp_too_large_error = true;
@@ -795,7 +798,6 @@ void Stabilizer::getActualParameters ()
     if (control_mode == MODE_ST) {
       hrp::Vector3 f_diff(hrp::Vector3::Zero());
       // moment control
-#define deg2rad(x) ((x) * M_PI / 180.0)
       for (size_t i = 0; i < stikp.size(); i++) {
         STIKParam& ikp = stikp[i];
         if (!is_feedback_control_enable[i]) continue;
@@ -817,12 +819,12 @@ void Stabilizer::getActualParameters ()
         { // Rot
             hrp::Vector3 tmp_damping_gain = (1-transition_smooth_gain) * ikp.eefm_rot_damping_gain * 10 + transition_smooth_gain * ikp.eefm_rot_damping_gain;
             ikp.d_foot_rpy = calcDampingControl(ikp.ref_moment, ee_moment, ikp.d_foot_rpy, tmp_damping_gain, ikp.eefm_rot_time_const);
-            ikp.d_foot_rpy = vlimit(ikp.d_foot_rpy, deg2rad(-10.0), deg2rad(10.0));
+            ikp.d_foot_rpy = vlimit(ikp.d_foot_rpy, -1 * ikp.eefm_rot_compensation_limit, ikp.eefm_rot_compensation_limit);
         }
         if (!eefm_use_force_difference_control) { // Pos
             hrp::Vector3 tmp_damping_gain = (1-transition_smooth_gain) * ikp.eefm_pos_damping_gain * 10 + transition_smooth_gain * ikp.eefm_pos_damping_gain;
             ikp.d_foot_pos = calcDampingControl(ikp.ref_force, sensor_force, ikp.d_foot_pos, tmp_damping_gain, ikp.eefm_pos_time_const_support);
-            ikp.d_foot_pos = foot_origin_rot.transpose() * vlimit(ikp.d_foot_pos, -0.025, 0.025);
+            ikp.d_foot_pos = foot_origin_rot.transpose() * vlimit(ikp.d_foot_pos, -1 * ikp.eefm_pos_compensation_limit, ikp.eefm_pos_compensation_limit);
         }
         // Actual ee frame =>
         ikp.ee_d_foot_rpy = (target->R * ikp.localR).transpose() * ikp.d_foot_rpy;
@@ -1076,17 +1078,31 @@ void Stabilizer::calcStateForEmergencySignal()
   }
   // CP Check
   bool is_cp_outside = false;
+  double width_offset = 0.0;
+  SimpleZMPDistributor::leg_type support_leg;
+  hrp::Vector3 leg_pos[2];
   if (on_ground && transition_count == 0 && control_mode == MODE_ST) {
-    hrp::Vector3 diff_cp = ref_cp - act_cp;
-    diff_cp(2) = 0.0;
     if (DEBUGP) {
-        std::cerr << "[" << m_profile.instance_name << "] CP value " << diff_cp.norm() << std::endl;
+        std::cerr << "[" << m_profile.instance_name << "] CP value " << "[" << act_cp(0) - ref_cp(0) << "," << act_cp(1) - ref_cp(1) << "] [m]" << std::endl;
     }
     // check CP inside
-    if (diff_cp.norm() > cp_check_margin) {
-      is_cp_outside = true;
+    for (size_t i = 0; i < stikp.size(); i++) {
+        if (stikp[i].ee_name.find("leg") == std::string::npos) continue;
+        hrp::Link* target = m_robot->sensor<hrp::ForceSensor>(stikp[i].sensor_name)->link;
+        leg_pos[i] = target->p + target->R * foot_origin_offset[i];
+    }
+    if (isContact(contact_states_index_map["rleg"]) && isContact(contact_states_index_map["lleg"])) {
+        support_leg = SimpleZMPDistributor::BOTH;
+        width_offset = (leg_pos[contact_states_index_map["lleg"]](1) - leg_pos[contact_states_index_map["rleg"]](1)) / 2.0;
+    } else if (isContact(contact_states_index_map["rleg"])) {
+        support_leg = SimpleZMPDistributor::RLEG;
+    } else if (isContact(contact_states_index_map["lleg"])) {
+        support_leg = SimpleZMPDistributor::LLEG;
+    }
+    is_cp_outside = !szd->is_cp_inside_foot(act_cp - ref_cp, support_leg, cp_check_margin, width_offset);
+    if (is_cp_outside) {
       if (initial_cp_too_large_error || loop % static_cast <int>(0.2/dt) ) { // once per 0.2[s]
-          std::cerr << "[" << m_profile.instance_name << "] CP too large error " << diff_cp.norm() << std::endl;
+          std::cerr << "[" << m_profile.instance_name << "] CP too large error " << "[" << act_cp(0) - ref_cp(0) << "," << act_cp(1) - ref_cp(1)  << "] [m]" << std::endl;
       }
       initial_cp_too_large_error = false;
     } else {
@@ -1414,8 +1430,10 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
   }
   i_stp.eefm_pos_time_const_support.length(stikp.size());
   i_stp.eefm_pos_damping_gain.length(stikp.size());
+  i_stp.eefm_pos_compensation_limit.length(stikp.size());
   i_stp.eefm_rot_time_const.length(stikp.size());
   i_stp.eefm_rot_damping_gain.length(stikp.size());
+  i_stp.eefm_rot_compensation_limit.length(stikp.size());
   for (size_t j = 0; j < stikp.size(); j++) {
       i_stp.eefm_pos_damping_gain[j].length(3);
       i_stp.eefm_pos_time_const_support[j].length(3);
@@ -1427,6 +1445,8 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
           i_stp.eefm_rot_damping_gain[j][i] = stikp[j].eefm_rot_damping_gain(i);
           i_stp.eefm_rot_time_const[j][i] = stikp[j].eefm_rot_time_const(i);
       }
+      i_stp.eefm_pos_compensation_limit[j] = stikp[j].eefm_pos_compensation_limit;
+      i_stp.eefm_rot_compensation_limit[j] = stikp[j].eefm_rot_compensation_limit;
   }
   i_stp.eefm_pos_time_const_swing = eefm_pos_time_const_swing;
   i_stp.eefm_pos_transition_time = eefm_pos_transition_time;
@@ -1537,8 +1557,10 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
   bool is_damping_parameter_ok = true;
   if ( i_stp.eefm_pos_damping_gain.length () == stikp.size() &&
        i_stp.eefm_pos_time_const_support.length () == stikp.size() &&
+       i_stp.eefm_pos_compensation_limit.length () == stikp.size() &&
        i_stp.eefm_rot_damping_gain.length () == stikp.size() &&
-       i_stp.eefm_rot_time_const.length () == stikp.size() ) {
+       i_stp.eefm_rot_time_const.length () == stikp.size() &&
+       i_stp.eefm_rot_compensation_limit.length () == stikp.size() ) {
       is_damping_parameter_ok = true;
       for (size_t j = 0; j < stikp.size(); j++) {
           for (size_t i = 0; i < 3; i++) {
@@ -1547,6 +1569,8 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
               stikp[j].eefm_rot_damping_gain(i) = i_stp.eefm_rot_damping_gain[j][i];
               stikp[j].eefm_rot_time_const(i) = i_stp.eefm_rot_time_const[j][i];
           }
+          stikp[j].eefm_pos_compensation_limit = i_stp.eefm_pos_compensation_limit[j];
+          stikp[j].eefm_rot_compensation_limit = i_stp.eefm_rot_compensation_limit[j];
       }
   } else {
       is_damping_parameter_ok = false;
@@ -1631,6 +1655,9 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
                     << ", eefm_pos_time_const_support = "
                     << stikp[j].eefm_pos_time_const_support.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]"))
                     << "[s]" << std::endl;
+          std::cerr << "[" << m_profile.instance_name << "]   [" << stikp[j].ee_name << "] "
+                    << "eefm_pos_compensation_limit = " << stikp[j].eefm_pos_compensation_limit << "[m], " << " "
+                    << "eefm_rot_compensation_limit = " << stikp[j].eefm_rot_compensation_limit << "[rad]" << std::endl;
       }
   } else {
       std::cerr << "[" << m_profile.instance_name << "]   eefm damping parameters cannot be set because of invalid param." << std::endl;

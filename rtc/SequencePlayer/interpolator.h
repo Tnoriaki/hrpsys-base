@@ -3,6 +3,7 @@
 
 #include <deque>
 #include <string>
+#include <coil/Mutex.h>
 
 using namespace std;
 
@@ -59,6 +60,7 @@ public:
   void interpolate(double& remain_t_);
   double deltaT() const { return dt; }
   double dimension() const { return dim; }
+  void setName (const std::string& _name) { name = _name; };
 private:
   // Current interpolation mode
   interpolation_mode imode;
@@ -81,6 +83,8 @@ private:
   double *a0, *a1, *a2, *a3, *a4, *a5;
   // Default average velocity for calc_interpolation_time
   double default_avg_vel;
+  // Interpolator name
+  std::string name;
 
   void hoffarbib(double &remain_t_,
 		 double a0, double a1, double a2,
@@ -89,6 +93,8 @@ private:
   void linear_interpolation(double &remain_t_,
 			    double gx,
 			    double &xx, double &vv, double &aa);
+  //Mutex to avoid poping twice the same element
+  coil::Mutex pop_mutex_;
 };
 
 #endif

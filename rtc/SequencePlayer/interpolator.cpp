@@ -4,6 +4,7 @@
 #include <cstring>
 using namespace std;
 #include "interpolator.h"
+#include <coil/Guard.h>
 
 interpolator::interpolator(int dim_, double dt_, interpolation_mode imode_, double default_avg_vel_)
 {
@@ -216,7 +217,7 @@ void interpolator::load(const char *fname, double time_to_start, double scale,
 {
   ifstream strm(fname);
   if (!strm.is_open()) {
-    cerr << "file not found(" << fname << ")" << endl;
+    cerr << "[interpolator " << name << "] file not found(" << fname << ")" << endl;
     return;
   }
   double *vs, ptime=-1,time, tmp;
@@ -267,6 +268,7 @@ void interpolator::push(const double *x_, const double *v_, const double *a_, bo
 
 void interpolator::pop()
 {
+  coil::Guard<coil::Mutex> lock(pop_mutex_);
   if (length > 0){
     length--;
     double *&vs = q.front();
@@ -283,6 +285,7 @@ void interpolator::pop()
 
 void interpolator::pop_back()
 {
+  coil::Guard<coil::Mutex> lock(pop_mutex_);
   if (length > 0){
     length--;
     double *&vs = q.back();
@@ -353,17 +356,17 @@ void interpolator::get(double *x_, double *v_, double *a_, bool popp)
   if (length!=0){
     double *&vs = q.front();
     if (vs == NULL) {
-      cerr << "interpolator::get vs = NULL, q.size() = " << q.size() 
+      cerr << "[interpolator " << name << "] interpolator::get vs = NULL, q.size() = " << q.size() 
 	   << ", length = " << length << endl;
     }
     double *&dvs = dq.front();
     if (dvs == NULL) {
-      cerr << "interpolator::get dvs = NULL, dq.size() = " << dq.size() 
+      cerr << "[interpolator " << name << "] interpolator::get dvs = NULL, dq.size() = " << dq.size() 
 	   << ", length = " << length << endl;
     }
     double *&ddvs = ddq.front();
     if (ddvs == NULL) {
-      cerr << "interpolator::get ddvs = NULL, ddq.size() = " << ddq.size() 
+      cerr << "[interpolator " << name << "] interpolator::get ddvs = NULL, ddq.size() = " << ddq.size() 
 	   << ", length = " << length << endl;
     }
     memcpy(x_, vs, sizeof(double)*dim);

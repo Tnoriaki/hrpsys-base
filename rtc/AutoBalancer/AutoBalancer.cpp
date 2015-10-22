@@ -222,13 +222,17 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
     }
 
     zmp_offset_interpolator = new interpolator(ikp.size()*3, m_dt);
+    zmp_offset_interpolator->setName(std::string(m_profile.instance_name)+" zmp_offset_interpolator");
     zmp_transition_time = 1.0;
     transition_interpolator = new interpolator(1, m_dt, interpolator::HOFFARBIB, 1);
+    transition_interpolator->setName(std::string(m_profile.instance_name)+" transition_interpolator");
     transition_interpolator_ratio = 1.0;
     adjust_footstep_interpolator = new interpolator(1, m_dt, interpolator::HOFFARBIB, 1);
+    adjust_footstep_interpolator->setName(std::string(m_profile.instance_name)+" adjust_footstep_interpolator");
     transition_time = 2.0;
     adjust_footstep_transition_time = 2.0;
     leg_names_interpolator = new interpolator(1, m_dt, interpolator::HOFFARBIB, 1);
+    leg_names_interpolator->setName(std::string(m_profile.instance_name)+" leg_names_interpolator");
     leg_names_interpolator_ratio = 1.0;
 
     // setting stride limitations from conf file
@@ -314,6 +318,7 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
 
     is_stop_mode = false;
     has_ik_failed = false;
+    is_hand_fix_mode = true;
 
     pos_ik_thre = 0.1*1e-3; // [m]
     rot_ik_thre = (1e-2)*M_PI/180.0; // [rad]
@@ -745,6 +750,7 @@ void AutoBalancer::getTargetParameters()
       tmp_fix_coords.rot(0,1) = yv1(0); tmp_fix_coords.rot(1,1) = yv1(1); tmp_fix_coords.rot(2,1) = yv1(2);
       tmp_fix_coords.rot(0,2) = ez(0); tmp_fix_coords.rot(1,2) = ez(1); tmp_fix_coords.rot(2,2) = ez(2);
     }
+    // Fix pos
     fixLegToCoords(tmp_fix_coords.pos, tmp_fix_coords.rot);
 
     /* update ref_forces ;; sp's absolute -> rmc's absolute */
@@ -771,6 +777,38 @@ void AutoBalancer::getTargetParameters()
         it->second.target_p0 = it->second.target_link->p;
         it->second.target_r0 = it->second.target_link->R;
       }
+    }
+    // Move hand for hand fix mode
+    //   If arms' ABCIKparam.is_active is true, move hands according to cog velocity.
+    //   If is_hand_fix_mode is false, no hand fix mode and move hands according to cog velocity.
+    //   If is_hand_fix_mode is true, hand fix mode and do not move hands in Y axis in tmp_fix_coords.rot.    
+    if (gg_is_walking) {
+        // hand control while walking = solve hand ik with is_hand_fix_mode and solve hand ik without is_hand_fix_mode
+        bool is_hand_control_while_walking = false;
+        for ( std::map<std::string, ABCIKparam>::iterator it = ikp.begin(); it != ikp.end(); it++ ) {
+            if ( it->second.is_active && std::find(leg_names.begin(), leg_names.end(), it->first) == leg_names.end()
+                 && it->first.find("arm") != std::string::npos ) {
+                is_hand_control_while_walking = true;
+            }
+        }
+        if (is_hand_control_while_walking) {
+        //if (false) { // Disabled temporarily
+            // Store hand_fix_initial_offset in the initialization of walking
+            if (is_hand_fix_initial) hand_fix_initial_offset = tmp_fix_coords.rot.transpose() * (hrp::Vector3(gg->get_cog()(0), gg->get_cog()(1), tmp_fix_coords.pos(2)) - tmp_fix_coords.pos);
+            is_hand_fix_initial = false;
+            hrp::Vector3 dif_p = hrp::Vector3(gg->get_cog()(0), gg->get_cog()(1), tmp_fix_coords.pos(2)) - tmp_fix_coords.pos - tmp_fix_coords.rot * hand_fix_initial_offset;
+            if (is_hand_fix_mode) {
+                dif_p = tmp_fix_coords.rot.transpose() * dif_p;
+                dif_p(1) = 0;
+                dif_p = tmp_fix_coords.rot * dif_p;
+            }
+            for ( std::map<std::string, ABCIKparam>::iterator it = ikp.begin(); it != ikp.end(); it++ ) {
+                if ( it->second.is_active && std::find(leg_names.begin(), leg_names.end(), it->first) == leg_names.end()
+                     && it->first.find("arm") != std::string::npos ) {
+                    it->second.target_p0 = it->second.target_p0 + dif_p;
+                }
+            }
+        }
     }
 
     hrp::Vector3 tmp_foot_mid_pos(hrp::Vector3::Zero());
@@ -1039,6 +1077,7 @@ void AutoBalancer::startWalking ()
     gg->set_default_zmp_offsets(default_zmp_offsets);
     gg->initialize_gait_parameter(ref_cog, init_support_leg_steps, init_swing_leg_dst_steps);
   }
+  is_hand_fix_initial = true;
   while ( !gg->proc_one_tick() );
   {
     Guard guard(m_mutex);
@@ -1288,10 +1327,20 @@ bool AutoBalancer::setGaitGeneratorParam(const OpenHRP::AutoBalancerService::Gai
   gg->set_leg_default_translate_pos(off);
   gg->set_default_step_time(i_param.default_step_time);
   gg->set_default_step_height(i_param.default_step_height);
-  gg->set_default_double_support_ratio(i_param.default_double_support_ratio);
-  gg->set_default_double_support_static_ratio(i_param.default_double_support_static_ratio);
-  gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio_swing_before);
-  gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio_swing_after);
+  gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio/2.0);
+  gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio/2.0);
+  gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio/2.0);
+  gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio/2.0);
+  gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio/2.0);
+  gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio/2.0);
+  // gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio_before);
+  // gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio_after);
+  // gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio_before);
+  // gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio_after);
+  // gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio_before);
+  // gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio_after);
+  // gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio_swing_before);
+  // gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio_swing_after);
   if (i_param.default_orbit_type == OpenHRP::AutoBalancerService::SHUFFLING) {
     gg->set_default_orbit_type(SHUFFLING);
   } else if (i_param.default_orbit_type == OpenHRP::AutoBalancerService::CYCLOID) {
@@ -1345,10 +1394,14 @@ bool AutoBalancer::getGaitGeneratorParam(OpenHRP::AutoBalancerService::GaitGener
   }
   i_param.default_step_time = gg->get_default_step_time();
   i_param.default_step_height = gg->get_default_step_height();
-  i_param.default_double_support_ratio = gg->get_default_double_support_ratio();
-  i_param.default_double_support_static_ratio = gg->get_default_double_support_static_ratio();
+  i_param.default_double_support_ratio_before = gg->get_default_double_support_ratio_before();
+  i_param.default_double_support_ratio_after = gg->get_default_double_support_ratio_after();
+  i_param.default_double_support_static_ratio_before = gg->get_default_double_support_static_ratio_before();
+  i_param.default_double_support_static_ratio_after = gg->get_default_double_support_static_ratio_after();
   i_param.default_double_support_ratio_swing_before = gg->get_default_double_support_ratio_swing_before();
   i_param.default_double_support_ratio_swing_after = gg->get_default_double_support_ratio_swing_after();
+  i_param.default_double_support_ratio = i_param.default_double_support_ratio_before + i_param.default_double_support_ratio_after;
+  i_param.default_double_support_static_ratio = i_param.default_double_support_static_ratio_before + i_param.default_double_support_static_ratio_after;
   if (gg->get_default_orbit_type() == SHUFFLING) {
     i_param.default_orbit_type = OpenHRP::AutoBalancerService::SHUFFLING;
   } else if (gg->get_default_orbit_type() == CYCLOID) {
@@ -1451,6 +1504,13 @@ bool AutoBalancer::setAutoBalancerParam(const OpenHRP::AutoBalancerService::Auto
   }
   pos_ik_thre = i_param.pos_ik_thre;
   rot_ik_thre = i_param.rot_ik_thre;
+  if (!gg_is_walking) {
+      is_hand_fix_mode = i_param.is_hand_fix_mode;
+      std::cerr << "[" << m_profile.instance_name << "]   is_hand_fix_mode = " << is_hand_fix_mode << std::endl;
+  } else {
+      std::cerr << "[" << m_profile.instance_name << "]   is_hand_fix_mode cannot be set in (gg_is_walking = true). Current is_hand_fix_mode is " << (is_hand_fix_mode?"true":"false") << std::endl;
+  }
+
   std::cerr << "[" << m_profile.instance_name << "]   move_base_gain = " << move_base_gain << std::endl;
   std::cerr << "[" << m_profile.instance_name << "]   default_zmp_offsets = ";
   for (size_t i = 0; i < ikp.size() * 3; i++) {
@@ -1510,6 +1570,7 @@ bool AutoBalancer::getAutoBalancerParam(OpenHRP::AutoBalancerService::AutoBalanc
   for (size_t i = 0; i < leg_names.size(); i++) i_param.leg_names[i] = leg_names.at(i).c_str();
   i_param.pos_ik_thre = pos_ik_thre;
   i_param.rot_ik_thre = rot_ik_thre;
+  i_param.is_hand_fix_mode = is_hand_fix_mode;
   return true;
 };
 
