@@ -632,6 +632,11 @@ void AutoBalancer::getTargetParameters()
       gg->get_swing_support_mid_coords(tmp_fix_coords);
       // set contactStates
       {
+         double double_leg_heights = 0;
+          for (size_t i = 0 ; i < leg_names.size(); i++) {
+              ABCIKparam& tmpikp = ikp[leg_names[i]];
+              double_leg_heights += (tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[i])[2];
+          }
           std::vector<std::string> tmp_current_support_states_names;
           {
               std::vector<leg_type> tmp_current_support_states = gg->get_current_support_states();
@@ -649,6 +654,7 @@ void AutoBalancer::getTargetParameters()
                   m_contactStates.data[contact_states_index_map[*it]] = true;
               } else {
                   m_contactStates.data[contact_states_index_map[*it]] = false;
+                  if (double_leg_heights < 1.0e-5) m_contactStates.data[contact_states_index_map[*it]] = true;
               }
           }
       }
