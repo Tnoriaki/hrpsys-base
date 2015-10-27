@@ -632,6 +632,11 @@ void AutoBalancer::getTargetParameters()
       gg->get_swing_support_mid_coords(tmp_fix_coords);
       // set contactStates
       {
+         double double_leg_heights = 0;
+          for (size_t i = 0 ; i < leg_names.size(); i++) {
+              ABCIKparam& tmpikp = ikp[leg_names[i]];
+              double_leg_heights += (tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[i])[2];
+          }
           std::vector<std::string> tmp_current_support_states_names;
           {
               std::vector<leg_type> tmp_current_support_states = gg->get_current_support_states();
@@ -649,6 +654,7 @@ void AutoBalancer::getTargetParameters()
                   m_contactStates.data[contact_states_index_map[*it]] = true;
               } else {
                   m_contactStates.data[contact_states_index_map[*it]] = false;
+                  if (double_leg_heights < 1.0e-5) m_contactStates.data[contact_states_index_map[*it]] = true;
               }
           }
       }
@@ -1321,12 +1327,20 @@ bool AutoBalancer::setGaitGeneratorParam(const OpenHRP::AutoBalancerService::Gai
   gg->set_leg_default_translate_pos(off);
   gg->set_default_step_time(i_param.default_step_time);
   gg->set_default_step_height(i_param.default_step_height);
-  gg->set_default_double_support_ratio(i_param.default_double_support_ratio);
-  gg->set_default_double_support_static_ratio(i_param.default_double_support_static_ratio);
-  gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio/2);
-  gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio/2);
-  // gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio_swing_before);
-  // gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio_swing_after);
+  // gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio/2.0);
+  // gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio/2.0);
+  // gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio/2.0);
+  // gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio/2.0);
+  // gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio/2.0);
+  // gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio/2.0);
+  // gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio_before);
+  // gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio_after);
+  gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio_before);
+  gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio_after);
+  gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio_before);
+  gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio_after);
+  gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio_swing_before);
+  gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio_swing_after);
   if (i_param.default_orbit_type == OpenHRP::AutoBalancerService::SHUFFLING) {
     gg->set_default_orbit_type(SHUFFLING);
   } else if (i_param.default_orbit_type == OpenHRP::AutoBalancerService::CYCLOID) {
@@ -1380,10 +1394,14 @@ bool AutoBalancer::getGaitGeneratorParam(OpenHRP::AutoBalancerService::GaitGener
   }
   i_param.default_step_time = gg->get_default_step_time();
   i_param.default_step_height = gg->get_default_step_height();
-  i_param.default_double_support_ratio = gg->get_default_double_support_ratio();
-  i_param.default_double_support_static_ratio = gg->get_default_double_support_static_ratio();
+  i_param.default_double_support_ratio_before = gg->get_default_double_support_ratio_before();
+  i_param.default_double_support_ratio_after = gg->get_default_double_support_ratio_after();
+  i_param.default_double_support_static_ratio_before = gg->get_default_double_support_static_ratio_before();
+  i_param.default_double_support_static_ratio_after = gg->get_default_double_support_static_ratio_after();
   i_param.default_double_support_ratio_swing_before = gg->get_default_double_support_ratio_swing_before();
   i_param.default_double_support_ratio_swing_after = gg->get_default_double_support_ratio_swing_after();
+  i_param.default_double_support_ratio = i_param.default_double_support_ratio_before + i_param.default_double_support_ratio_after;
+  i_param.default_double_support_static_ratio = i_param.default_double_support_static_ratio_before + i_param.default_double_support_static_ratio_after;
   if (gg->get_default_orbit_type() == SHUFFLING) {
     i_param.default_orbit_type = OpenHRP::AutoBalancerService::SHUFFLING;
   } else if (gg->get_default_orbit_type() == CYCLOID) {
