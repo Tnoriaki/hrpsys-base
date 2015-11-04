@@ -150,6 +150,10 @@ namespace rats
     // Calculate total reference ZMP
     if (is_start_double_support_phase() || is_end_double_support_phase()) {
       ret = refzmp_cur_list[refzmp_index];
+      if (use_skate_mode){
+          hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index];
+          ret = current_support_zmp + hrp::Vector3(0.1,0,0) * one_step_count * dt;
+      }
     } else if ( cnt < double_support_static_count_half_before ) { // Start double support static period
       hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index];
       hrp::Vector3 prev_support_zmp = refzmp_cur_list[refzmp_index-1] + zmp_diff * foot_x_axises_list[refzmp_index-1].front();
@@ -192,13 +196,10 @@ namespace rats
         hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index];
         hrp::Vector3 prev_support_zmp = refzmp_cur_list[refzmp_index-1] + zmp_diff * foot_x_axises_list[refzmp_index-1].front();
         hrp::Vector3 next_support_zmp = refzmp_cur_list[refzmp_index+1] +zmp_diff * foot_x_axises_list[refzmp_index+1].front();
-        double ratio = (is_end_double_support_phase()?0.5:0);
-        ret = (1 - ratio) * current_support_zmp + ratio * next_support_zmp;
-        if( is_second_phase() || is_second_last_phase() ){
-            ratio = calc_zmp_transition_ratio(cnt-double_support_count_half_before, one_step_count-double_support_count_half_before-double_support_count_half_after);
-            ret(0) = (1 - ratio) * current_support_zmp(0) + ratio * next_support_zmp(0);
-            ret(1) = (1 - ratio) * prev_support_zmp(1) + ratio * next_support_zmp(1);
-        }
+        ret = current_support_zmp + hrp::Vector3(0.1,0,0) * cnt * dt;
+        if( is_second_phase() ) ret = current_support_zmp;
+        if( is_second_last_phase() ) ret = current_support_zmp + hrp::Vector3(0.1,0,0) * one_step_count * dt;
+        if( is_end_double_support_phase() ) ret = (current_support_zmp + prev_support_zmp) / 2.0 + hrp::Vector3(0.1,0,0) * one_step_count * dt;
       }
     }
   };
@@ -440,6 +441,7 @@ namespace rats
     swing_leg_dst_steps = fnsl[current_footstep_index];
     if (footstep_index != 0) { // If not initial step, support_leg_coords is previous swing_leg_dst_coords // why we need this?
         support_leg_steps = support_leg_steps_list[current_footstep_index];
+        cdktg.update_support_leg_steps_for_slide(support_leg_steps.front().worldcoords.pos, current_footstep_index); //update support_leg_steps foruniform motion
     }
     support_leg_types.clear();
     for (std::vector<step_node>::iterator it = support_leg_steps.begin(); it != support_leg_steps.end(); it++) {

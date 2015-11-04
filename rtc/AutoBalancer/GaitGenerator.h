@@ -222,18 +222,6 @@ namespace rats
       const bool is_second_phase () const { return refzmp_index == 1; };
       const bool is_second_last_phase () const { return refzmp_index == refzmp_cur_list.size()-2; };
       const bool is_end_double_support_phase () const { return refzmp_index == refzmp_cur_list.size() - 1; };
-      const double calc_zmp_transition_ratio(const double cnt, const double transition_count)
-      {
-          double ratio;
-          // if (cnt < (transition_count*2.0/3.0)){
-          //     ratio = 0;
-          // }else{
-          //     ratio = 1.0 * (cnt - transition_count/2.0) / (transition_count/2.0);
-          // }
-          //ratio = 1.0 * cnt / transition_count;
-          ratio = 0;
-          return ratio;
-      };
 #ifndef HAVE_MAIN
     public:
 #endif
@@ -324,7 +312,6 @@ namespace rats
     {
     private:
       hrp::Vector3 pos, vel, acc; // [m], [m/s], [m/s^2]
-      hrp::Vector3 sliding_vel;
       double dt; // [s]
       // Implement hoffarbib to configure remain_time;
       void hoffarbib_interpolation (const double tmp_remain_time, const hrp::Vector3& tmp_goal)
@@ -352,6 +339,7 @@ namespace rats
       virtual hrp::Vector3 interpolate_antecedent_path (const hrp::Vector3& start, const hrp::Vector3& goal, const double height, const double tmp_ratio) = 0;
     public:
       bool use_skate_mode;
+      hrp::Vector3 sliding_vel;
       delay_hoffarbib_trajectory_generator () : time_offset(0.35), final_distance_weight(1.0), one_step_count(0), current_count(0), double_support_count_before(0), double_support_count_after(0) {};
       ~delay_hoffarbib_trajectory_generator() { };
       void set_dt (const double _dt) { dt = _dt; };
@@ -391,34 +379,44 @@ namespace rats
       void get_trajectory_point (hrp::Vector3& ret, const hrp::Vector3& start, const hrp::Vector3& goal, const double height)
       {
         if ( current_count == 0 ) {
-            pos = start;
-            if (vel != hrp::Vector3::Zero()) sliding_vel = vel;
-            if (vel(0) > 0){
+            if (vel == hrp::Vector3::Zero() && sliding_vel == hrp::Vector3::Zero()){ //1st step vel = 0 sliding_vel =0;
+                pos = start;
+            }else if(sliding_vel != hrp::Vector3::Zero()){ //3rd step vel = 0, sliding_vel >0
+                pos = start + sliding_vel * one_step_count * dt;
+                vel = sliding_vel;
+            }else if( vel != hrp::Vector3::Zero()){ //2nd step vel > 0, sliding_vel = 0
+                pos = start;
+                sliding_vel = vel;
                 vel = hrp::Vector3::Zero();
-            }else{
-                vel = -vel;
             }
             acc = hrp::Vector3::Zero();
-        };
+        }
         if ( double_support_count_before <= current_count && current_count < one_step_count - double_support_count_after ) { // swing phase
           size_t swing_remain_count = one_step_count - current_count - double_support_count_after;
           size_t swing_one_step_count = one_step_count - double_support_count_before - double_support_count_after;
           if (height == 0 && start(0) == 0) {
-            hoffarbib_interpolation_vel(swing_remain_count*dt, goal, hrp::Vector3(0.5,0,0));
+              hoffarbib_interpolation_vel(swing_remain_count*dt, goal, hrp::Vector3(0.1,0,0)); //1st step
           }else if (height == 0 && start(0) - goal(0) != 0){
-              hoffarbib_interpolation(swing_remain_count*dt, goal);
-          }else{
+              hoffarbib_interpolation(swing_remain_count*dt, goal+sliding_vel*one_step_count*dt); //3rd step
+          }else if (start(0) - goal(0) != 0){
             if (swing_remain_count*dt > time_offset) { // antecedent path is still interpolating
-              hoffarbib_interpolation_vel (time_offset, interpolate_antecedent_path(start, goal, height, ((swing_one_step_count - swing_remain_count) / (swing_one_step_count - time_offset/dt))), -sliding_vel);
+                hoffarbib_interpolation_vel (time_offset, interpolate_antecedent_path(start, goal+sliding_vel*one_step_count*dt, height, ((swing_one_step_count - swing_remain_count) / (swing_one_step_count - time_offset/dt))), hrp::Vector3::Zero());
             } else if (swing_remain_count > 0) { // antecedent path already reached to goal
-              hoffarbib_interpolation_vel (swing_remain_count*dt, goal, -sliding_vel);
+                hoffarbib_interpolation_vel (swing_remain_count*dt, goal+sliding_vel*one_step_count*dt, hrp::Vector3::Zero());
             } else {
-              pos = goal;
+              pos = goal+sliding_vel*one_step_count*dt;
             }
           }
         }
         ret = pos;
         current_count++;
+      };
+      void update_support_leg_steps_for_slide (hrp::Vector3& ret, const size_t _foot_step_index) {
+          if(_foot_step_index == 2){
+              ret += current_count * dt * hrp::Vector3(0.1,0,0);
+          }else if (_foot_step_index > 2){
+              ret += one_step_count * dt * hrp::Vector3(0.1,0,0);
+          }
       };
       double get_swing_trajectory_delay_time_offset () { return time_offset; };
       double get_swing_trajectory_final_distance_weight () { return final_distance_weight; };
