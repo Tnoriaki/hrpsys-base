@@ -196,7 +196,8 @@ namespace rats
         ret = (1 - ratio) * current_support_zmp + ratio * next_support_zmp;
         if( is_second_phase() || is_second_last_phase() ){
             ratio = calc_zmp_transition_ratio(cnt-double_support_count_half_before, one_step_count-double_support_count_half_before-double_support_count_half_after);
-            ret = (1 - ratio) * prev_support_zmp + ratio * next_support_zmp;
+            ret(0) = (1 - ratio) * current_support_zmp(0) + ratio * next_support_zmp(0);
+            ret(1) = (1 - ratio) * prev_support_zmp(1) + ratio * next_support_zmp(1);
         }
       }
     }
