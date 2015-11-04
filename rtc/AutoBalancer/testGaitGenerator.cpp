@@ -635,11 +635,18 @@ public:
         std::cerr << "test14 : kick walk" << std::endl;
         /* initialize sample footstep_list */
         parse_params();
-        gg->clear_footstep_nodes_list();
+        std::vector< std::vector<step_node> > fnsl;
         gg->set_default_orbit_type(CYCLOIDDELAYKICK);
-        coordinates start_ref_coords;
-        mid_coords(start_ref_coords, 0.5, coordinates(leg_pos[1]), coordinates(leg_pos[0]));
-        gg->go_pos_param_2_footstep_nodes_list(300*1e-3, 0, 0, boost::assign::list_of(coordinates(leg_pos[1])), start_ref_coords, boost::assign::list_of(LLEG));
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), 0, 0, 0)));
+        fnsl.push_back(boost::assign::list_of(step_node("rleg", coordinates(hrp::Vector3(hrp::Vector3(200*1e-3, 0, 0)+leg_pos[0])), 0, gg->get_default_step_time(), 0, 0)));
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(400*1e-3, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));
+        fnsl.push_back(boost::assign::list_of(step_node("rleg", coordinates(hrp::Vector3(hrp::Vector3(400*1e-3, 0, 0)+leg_pos[0])), 0, gg->get_default_step_time(), 0, 0)));
+        gg->set_foot_steps_list(fnsl);
+        // gg->clear_footstep_nodes_list();
+        // gg->set_default_orbit_type(CYCLOIDDELAYKICK);
+        // coordinates start_ref_coords;
+        // mid_coords(start_ref_coords, 0.5, coordinates(leg_pos[1]), coordinates(leg_pos[0]));
+        // gg->go_pos_param_2_footstep_nodes_list(300*1e-3, 0, 0, boost::assign::list_of(coordinates(leg_pos[1])), start_ref_coords, boost::assign::list_of(LLEG));
         gen_and_plot_walk_pattern();
     };
 
@@ -679,6 +686,10 @@ public:
               if (++i < arg_strs.size()) gg->set_default_double_support_static_ratio_before(atof(arg_strs[i].c_str()));
           } else if ( arg_strs[i]== "--default-double-support-static-ratio-after" ) {
               if (++i < arg_strs.size()) gg->set_default_double_support_static_ratio_after(atof(arg_strs[i].c_str()));
+          } else if ( arg_strs[i]== "--default-double-support-ratio-swing-before" ) {
+              if (++i < arg_strs.size()) gg->set_default_double_support_ratio_swing_before(atof(arg_strs[i].c_str()));
+          } else if ( arg_strs[i]== "--default-double-support-ratio-swing-after" ) {
+              if (++i < arg_strs.size()) gg->set_default_double_support_ratio_swing_after(atof(arg_strs[i].c_str()));
           } else if ( arg_strs[i]== "--swing-trajectory-delay-time-offset" ) {
               if (++i < arg_strs.size()) gg->set_swing_trajectory_delay_time_offset(atof(arg_strs[i].c_str()));
           } else if ( arg_strs[i]== "--swing-trajectory-final-distance-weight" ) {
