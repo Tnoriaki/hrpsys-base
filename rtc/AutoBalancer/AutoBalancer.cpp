@@ -632,11 +632,6 @@ void AutoBalancer::getTargetParameters()
       gg->get_swing_support_mid_coords(tmp_fix_coords);
       // set contactStates
       {
-         double double_leg_heights = 0;
-          for (size_t i = 0 ; i < leg_names.size(); i++) {
-              ABCIKparam& tmpikp = ikp[leg_names[i]];
-              double_leg_heights += (tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[i])[2];
-          }
           std::vector<std::string> tmp_current_support_states_names;
           {
               std::vector<leg_type> tmp_current_support_states = gg->get_current_support_states();
@@ -654,7 +649,6 @@ void AutoBalancer::getTargetParameters()
                   m_contactStates.data[contact_states_index_map[*it]] = true;
               } else {
                   m_contactStates.data[contact_states_index_map[*it]] = false;
-                  if (double_leg_heights < 1.0e-5) m_contactStates.data[contact_states_index_map[*it]] = true;
               }
           }
       }
@@ -1358,8 +1352,10 @@ bool AutoBalancer::setGaitGeneratorParam(const OpenHRP::AutoBalancerService::Gai
   }
   gg->set_swing_trajectory_delay_time_offset(i_param.swing_trajectory_delay_time_offset);
   gg->set_swing_trajectory_final_distance_weight(i_param.swing_trajectory_final_distance_weight);
+  gg->set_swing_leg_take_off_vel(hrp::Vector3(i_param.swing_leg_take_off_vel[0], i_param.swing_leg_take_off_vel[1], i_param.swing_leg_take_off_vel[2]));
+  gg->set_swing_leg_landing_vel(hrp::Vector3(i_param.swing_leg_landing_vel[0], i_param.swing_leg_landing_vel[1], i_param.swing_leg_landing_vel[2]));
   gg->set_stair_trajectory_way_point_offset(hrp::Vector3(i_param.stair_trajectory_way_point_offset[0], i_param.stair_trajectory_way_point_offset[1], i_param.stair_trajectory_way_point_offset[2]));
-  gg->set_cycloid_delay_kick_point_offset(hrp::Vector3(i_param.cycloid_delay_kick_point_offset[0], i_param.cycloid_delay_kick_point_offset[1], i_param.cycloid_delay_kick_point_offset[2]));  
+  gg->set_cycloid_delay_kick_point_offset(hrp::Vector3(i_param.cycloid_delay_kick_point_offset[0], i_param.cycloid_delay_kick_point_offset[1], i_param.cycloid_delay_kick_point_offset[2]));
   gg->set_gravitational_acceleration(i_param.gravitational_acceleration);
   gg->set_toe_angle(i_param.toe_angle);
   gg->set_heel_angle(i_param.heel_angle);
@@ -1422,6 +1418,10 @@ bool AutoBalancer::getGaitGeneratorParam(OpenHRP::AutoBalancerService::GaitGener
   for (size_t i = 0; i < 3; i++) i_param.stair_trajectory_way_point_offset[i] = tmpv(i);
   tmpv = gg->get_cycloid_delay_kick_point_offset();
   for (size_t i = 0; i < 3; i++) i_param.cycloid_delay_kick_point_offset[i] = tmpv(i);
+  tmpv = gg->get_swing_leg_take_off_vel();
+  for (size_t i = 0; i < 3; i++) i_param.swing_leg_take_off_vel[i] = tmpv(i);
+  tmpv = gg->get_swing_leg_landing_vel();
+  for (size_t i = 0; i < 3; i++) i_param.swing_leg_landing_vel[i] = tmpv(i);
   i_param.swing_trajectory_delay_time_offset = gg->get_swing_trajectory_delay_time_offset();
   i_param.swing_trajectory_final_distance_weight = gg->get_swing_trajectory_final_distance_weight();
   i_param.gravitational_acceleration = gg->get_gravitational_acceleration();
