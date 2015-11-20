@@ -845,6 +845,13 @@ void AutoBalancer::getTargetParameters()
     ref_cog(2) = tmp_ref_cog(2);
     if (gg_is_walking) {
       ref_zmp = gg->get_refzmp();
+      if( gg->get_lcg_count() > gg->get_one_step_count() * (1 - gg->get_default_double_support_ratio_before())){
+        ref_zmp(0) += gg->get_swing_leg_acc()(0) * tmp_ref_cog(2) / gg->get_gravitational_acceleration();
+      }else if( gg->get_lcg_count() < gg->get_one_step_count() * (gg->get_default_double_support_ratio_after())){
+        if(gg->get_swing_leg_acc()(0) > 0){
+          ref_zmp(0) += gg->get_swing_leg_acc()(0) * tmp_ref_cog(2) / gg->get_gravitational_acceleration();
+        }
+      }
     } else {
       ref_zmp(0) = ref_cog(0);
       ref_zmp(1) = ref_cog(1);

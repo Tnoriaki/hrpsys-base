@@ -637,9 +637,10 @@ public:
         parse_params();
         gg->clear_footstep_nodes_list();
         gg->set_default_orbit_type(CYCLOIDDELAYKICK);
-        coordinates start_ref_coords;
-        mid_coords(start_ref_coords, 0.5, coordinates(leg_pos[1]), coordinates(leg_pos[0]));
-        gg->go_pos_param_2_footstep_nodes_list(300*1e-3, 0, 0, boost::assign::list_of(coordinates(leg_pos[1])), start_ref_coords, boost::assign::list_of(LLEG));
+        std::vector< std::vector<step_node> > fnsl;
+        fnsl.push_back(boost::assign::list_of(step_node("rleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[0])), gg->get_default_step_height(), 0, 0, 0)));
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));
+        gg->set_foot_steps_list(fnsl);
         gen_and_plot_walk_pattern();
     };
 
@@ -692,6 +693,16 @@ public:
               if (++i < arg_strs.size()) {
                   coil::vstring strs = coil::split(std::string(arg_strs[i].c_str()), ",");
                   gg->set_cycloid_delay_kick_point_offset(hrp::Vector3(atof(strs[0].c_str()), atof(strs[1].c_str()), atof(strs[2].c_str())));
+              }
+          } else if ( arg_strs[i]== "--swing-leg-take-off-vel" ) {
+              if (++i < arg_strs.size()) {
+                  coil::vstring strs = coil::split(std::string(arg_strs[i].c_str()), ",");
+                  gg->set_swing_leg_take_off_vel(hrp::Vector3(atof(strs[0].c_str()), atof(strs[1].c_str()), atof(strs[2].c_str())));
+              }
+          } else if ( arg_strs[i]== "--swing-leg-landing-vel" ) {
+              if (++i < arg_strs.size()) {
+                  coil::vstring strs = coil::split(std::string(arg_strs[i].c_str()), ",");
+                  gg->set_swing_leg_landing_vel(hrp::Vector3(atof(strs[0].c_str()), atof(strs[1].c_str()), atof(strs[2].c_str())));
               }
           } else if ( arg_strs[i]== "--toe-angle" ) {
               if (++i < arg_strs.size()) gg->set_toe_angle(atof(arg_strs[i].c_str()));
