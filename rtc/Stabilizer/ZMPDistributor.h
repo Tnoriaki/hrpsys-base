@@ -531,7 +531,7 @@ public:
         // QP
         double norm_weight = 1e-7;
         double cop_weight = 1e-3;
-        double ref_force_weight = 1e-7;
+        double ref_force_weight = 0.1;
         hrp::dvector total_fm(3);
         total_fm(0) = total_fz;
         total_fm(1) = 0;
@@ -585,8 +585,8 @@ public:
                     Kmat(3*j+1, i+j*state_dim_one) = mm[j](1,i);
                     Kmat(3*j+2, i+j*state_dim_one) = mm[j](2,i);
                 }
-                if( ref_foot_force[0](2) + ref_foot_force[1](2) == 0) ref_foot_force[j](2) = total_fz/2.0;
                 reff(3*j+0) = ref_foot_force[j](2);
+                if( ref_foot_force[0](2) + ref_foot_force[1](2) == 0) reff(3*j+0) = total_fz/2.0;
                 reff(3*j+1) = ref_foot_moment[j](0);
                 reff(3*j+2) = ref_foot_moment[j](1);
                 KW(j*3,j*3) = KW(j*3+1,j*3+1) = KW(j*3+2,j*3+2) = ref_force_weight;
@@ -608,16 +608,19 @@ public:
             }
             Hmat += Cmat.transpose() * CW * Cmat;
         }
-        // std::cerr << "H " << Hmat << std::endl;
-        // std::cerr << "g " << gvec << std::endl;
+        std::cerr << "H " << Hmat << std::endl;
+        std::cerr << "g " << gvec << std::endl;
         solveForceMomentQPOASES(ff, state_dim, ee_num, Hmat, gvec);
         hrp::dvector tmpv(3);
         for (size_t fidx = 0; fidx < ee_num; fidx++) {
             tmpv = mm[fidx] * ff[fidx];
-            ref_foot_force[fidx] = hrp::Vector3(0,0,tmpv(0));
-            ref_foot_moment[fidx] = -1*hrp::Vector3(tmpv(1),tmpv(2),0);
+            // ref_foot_force[fidx] = hrp::Vector3(0,0,tmpv(0));
+            // ref_foot_moment[fidx] = -1*hrp::Vector3(tmpv(1),tmpv(2),0);
+            ref_foot_force[fidx](2) = tmpv(0);
+            ref_foot_moment[fidx](0) = -tmpv(1);
+            ref_foot_moment[fidx](1) = -tmpv(2);
         }
-        if (printp) {
+        if (printp == false) {
             std::cerr << "[" << print_str << "] force moment distribution " << (use_cop_distribution ? "(QP COP)" : "(QP)") << std::endl;
             //std::cerr << "[" << print_str << "]   alpha = " << alpha << ", fz_alpha = " << fz_alpha << std::endl;
             // std::cerr << "[" << print_str << "]   "
