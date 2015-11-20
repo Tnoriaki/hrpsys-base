@@ -673,9 +673,15 @@ void AutoBalancer::getTargetParameters()
           if (DEBUGP) {
           std::cerr << "[" << m_profile.instance_name << "] alpha:" << alpha << std::endl;
           }
-          double mg = m_robot->totalMass() * gg->get_gravitational_acceleration();
-          m_force[0].data[0] = alpha * mg;
-          m_force[1].data[0] = (1-alpha) * mg;
+          double M = m_robot->totalMass();
+          double G = gg->get_gravitational_acceleration();
+          hrp::Vector3 cog_acc = gg->get_cog_acc();
+          m_force[0].data[0] = alpha * M * cog_acc(0);
+          m_force[1].data[0] = (1-alpha) * M * cog_acc(0);
+          m_force[0].data[1] = alpha * M * cog_acc(1);
+          m_force[1].data[1] = (1-alpha) * M * cog_acc(1);
+          m_force[0].data[2] = alpha * M * (cog_acc(2) + G);
+          m_force[1].data[2] = (1-alpha) * M * (cog_acc(2) + G);
       }
       // set limbCOPOffset
       {

@@ -531,6 +531,7 @@ public:
         // QP
         double norm_weight = 1e-7;
         double cop_weight = 1e-3;
+        double ref_force_weight = 1e-7;
         hrp::dvector total_fm(3);
         total_fm(0) = total_fz;
         total_fm(1) = 0;
@@ -575,14 +576,20 @@ public:
         // std::cerr << total_fm << std::endl;
         //
         {
-            hrp::dmatrix Kmat = hrp::dmatrix::Zero(ee_num,state_dim);
-            hrp::dmatrix KW = hrp::dmatrix::Zero(ee_num, ee_num);
-            hrp::dvector reff(ee_num);
+            hrp::dmatrix Kmat = hrp::dmatrix::Zero(ee_num * 3,state_dim);
+            hrp::dmatrix KW = hrp::dmatrix::Zero(ee_num * 3, ee_num * 3);
+            hrp::dvector reff(ee_num * 3);
             for (size_t j = 0; j < ee_num; j++) {
                 for (size_t i = 0; i < state_dim_one; i++) {
-                    Kmat(j,i+j*state_dim_one) = 1.0;
+                    Kmat(3*j+0, i+j*state_dim_one) = mm[j](0,i);
+                    Kmat(3*j+1, i+j*state_dim_one) = mm[j](1,i);
+                    Kmat(3*j+2, i+j*state_dim_one) = mm[j](2,i);
                 }
-                reff(j) = total_fz/2.0;
+                if( ref_foot_force[0](2) + ref_foot_force[1](2) == 0) ref_foot_force[j](2) = total_fz/2.0;
+                reff(3*j+0) = ref_foot_force[j](2);
+                reff(3*j+1) = ref_foot_moment[j](0);
+                reff(3*j+2) = ref_foot_moment[j](1);
+                KW(j*3,j*3) = KW(j*3+1,j*3+1) = KW(j*3+2,j*3+2) = ref_force_weight;
             }
             Hmat += Kmat.transpose() * KW * Kmat;
             gvec += -1 * Kmat.transpose() * KW * reff;
