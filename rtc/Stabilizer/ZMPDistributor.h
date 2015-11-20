@@ -531,7 +531,7 @@ public:
         // QP
         double norm_weight = 1e-7;
         double cop_weight = 1e-3;
-        double ref_force_weight = 1e-7;
+        double ref_force_weight = 0.1;
         hrp::dvector total_fm(3);
         total_fm(0) = total_fz;
         total_fm(1) = 0;
@@ -585,8 +585,8 @@ public:
                     Kmat(3*j+1, i+j*state_dim_one) = mm[j](1,i);
                     Kmat(3*j+2, i+j*state_dim_one) = mm[j](2,i);
                 }
-                if( ref_foot_force[0](2) + ref_foot_force[1](2) == 0) ref_foot_force[j](2) = total_fz/2.0;
                 reff(3*j+0) = ref_foot_force[j](2);
+                if( ref_foot_force[0](2) + ref_foot_force[1](2) == 0) reff(3*j+0) = total_fz/2.0;
                 reff(3*j+1) = ref_foot_moment[j](0);
                 reff(3*j+2) = ref_foot_moment[j](1);
                 KW(j*3,j*3) = KW(j*3+1,j*3+1) = KW(j*3+2,j*3+2) = ref_force_weight;
