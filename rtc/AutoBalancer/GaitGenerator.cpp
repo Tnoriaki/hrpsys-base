@@ -373,7 +373,11 @@ namespace rats
   {
     mid_coords(ret, swing_rot_ratio, start, goal);
     cdktg.set_start_rot(hrp::Matrix33(start.rot));
-    cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height);
+    if( height == 0 ){
+        cdktg.get_trajectory_point(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height);
+    }else{
+        cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height);
+    }
   };
 
   void leg_coords_generator::cross_delay_midcoords (coordinates& ret, const coordinates& start,
