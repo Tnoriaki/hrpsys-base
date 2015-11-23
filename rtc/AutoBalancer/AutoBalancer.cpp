@@ -673,15 +673,47 @@ void AutoBalancer::getTargetParameters()
               ABCIKparam& tmpikp = ikp[leg_names[i]];
               ee_pos.push_back(tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[i]);
           }
+          hrp::Vector3 tmp_ref_cog(m_robot->calcCM());
+          ref_zmp = gg->get_refzmp();
+          if( gg->get_lcg_count() > gg->get_one_step_count() * (1 - gg->get_default_double_support_ratio_before())){
+              ref_zmp(0) += gg->get_swing_leg_acc()(0) * tmp_ref_cog(2) / gg->get_gravitational_acceleration();
+          }else if( gg->get_lcg_count() < gg->get_one_step_count() * (gg->get_default_double_support_ratio_after())){
+              if(gg->get_swing_leg_acc()(0) > 0){
+                  ref_zmp(0) += gg->get_swing_leg_acc()(0) * tmp_ref_cog(2) / gg->get_gravitational_acceleration();
+              }
+          }
           double alpha = (ref_zmp - ee_pos[1]).norm() / (ee_pos[0] - ee_pos[1]).norm();
           if (alpha>1.0) alpha = 1.0;
           if (alpha<0.0) alpha = 0.0;
           if (DEBUGP) {
           std::cerr << "[" << m_profile.instance_name << "] alpha:" << alpha << std::endl;
           }
-          double mg = m_robot->totalMass() * gg->get_gravitational_acceleration();
-          m_force[0].data[0] = alpha * mg;
-          m_force[1].data[0] = (1-alpha) * mg;
+          double M = m_robot->totalMass();
+          double G = gg->get_gravitational_acceleration();
+          hrp::Vector3 cog_acc = gg->get_cog_acc();
+          m_force[0].data[0] = alpha * M * cog_acc(0);
+          m_force[1].data[0] = (1-alpha) * M * cog_acc(0);
+          m_force[0].data[1] = alpha * M * cog_acc(1);
+          m_force[1].data[1] = (1-alpha) * M * cog_acc(1);
+          m_force[0].data[2] = alpha * M * (cog_acc(2) + G);
+          m_force[1].data[2] = (1-alpha) * M * (cog_acc(2) + G);
+          // for skate//
+          double u_f = 0.5;
+          if( gg->get_lcg_count() > gg->get_one_step_count() * (1 - gg->get_default_double_support_ratio_before())){
+              if ( m_force[1].data[2] < std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0)) ) / u_f){
+                  m_force[1].data[2] = std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0))) / u_f;
+                  m_force[0].data[2] = M * G - m_force[1].data[2];
+              }
+          }else if( gg->get_lcg_count() < gg->get_one_step_count() * (gg->get_default_double_support_ratio_after())){
+              if ( m_force[1].data[2] < std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0)) ) / u_f && gg->get_swing_leg_acc()(0) > 0){
+                  m_force[1].data[2] = std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0))) / u_f;
+                  m_force[0].data[2] = M * G - m_force[1].data[2];
+              }
+          }
+          m_force[0].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * alpha;
+          m_force[1].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * (1 - alpha);
+          m_force[0].data[4] = ((ee_pos[0](0) - ref_zmp(0)) * m_force[0].data[2] + (ee_pos[1](0) - ref_zmp(0)) * m_force[1].data[2]) * alpha;
+          m_force[1].data[4] = ((ee_pos[0](0) - ref_zmp(0)) * m_force[0].data[2] + (ee_pos[1](0) - ref_zmp(0)) * m_force[1].data[2]) * (1 - alpha);
       }
       // set limbCOPOffset
       {
@@ -851,6 +883,13 @@ void AutoBalancer::getTargetParameters()
     ref_cog(2) = tmp_ref_cog(2);
     if (gg_is_walking) {
       ref_zmp = gg->get_refzmp();
+      if( gg->get_lcg_count() > gg->get_one_step_count() * (1 - gg->get_default_double_support_ratio_before())){
+        ref_zmp(0) += gg->get_swing_leg_acc()(0) * tmp_ref_cog(2) / gg->get_gravitational_acceleration();
+      }else if( gg->get_lcg_count() < gg->get_one_step_count() * (gg->get_default_double_support_ratio_after())){
+        if(gg->get_swing_leg_acc()(0) > 0){
+          ref_zmp(0) += gg->get_swing_leg_acc()(0) * tmp_ref_cog(2) / gg->get_gravitational_acceleration();
+        }
+      }
     } else {
       ref_zmp(0) = ref_cog(0);
       ref_zmp(1) = ref_cog(1);
@@ -1327,20 +1366,20 @@ bool AutoBalancer::setGaitGeneratorParam(const OpenHRP::AutoBalancerService::Gai
   gg->set_leg_default_translate_pos(off);
   gg->set_default_step_time(i_param.default_step_time);
   gg->set_default_step_height(i_param.default_step_height);
-  gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio/2.0);
-  gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio/2.0);
-  gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio/2.0);
-  gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio/2.0);
-  gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio/2.0);
-  gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio/2.0);
-  // gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio_before);
-  // gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio_after);
-  // gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio_before);
-  // gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio_after);
+  // gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio/2.0);
+  // gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio/2.0);
+  // gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio/2.0);
+  // gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio/2.0);
+  // gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio/2.0);
+  // gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio/2.0);
   // gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio_before);
   // gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio_after);
-  // gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio_swing_before);
-  // gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio_swing_after);
+  gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio_before);
+  gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio_after);
+  gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio_before);
+  gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio_after);
+  gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio_swing_before);
+  gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio_swing_after);
   if (i_param.default_orbit_type == OpenHRP::AutoBalancerService::SHUFFLING) {
     gg->set_default_orbit_type(SHUFFLING);
   } else if (i_param.default_orbit_type == OpenHRP::AutoBalancerService::CYCLOID) {
@@ -1358,8 +1397,10 @@ bool AutoBalancer::setGaitGeneratorParam(const OpenHRP::AutoBalancerService::Gai
   }
   gg->set_swing_trajectory_delay_time_offset(i_param.swing_trajectory_delay_time_offset);
   gg->set_swing_trajectory_final_distance_weight(i_param.swing_trajectory_final_distance_weight);
+  gg->set_swing_leg_take_off_vel(hrp::Vector3(i_param.swing_leg_take_off_vel[0], i_param.swing_leg_take_off_vel[1], i_param.swing_leg_take_off_vel[2]));
+  gg->set_swing_leg_landing_vel(hrp::Vector3(i_param.swing_leg_landing_vel[0], i_param.swing_leg_landing_vel[1], i_param.swing_leg_landing_vel[2]));
   gg->set_stair_trajectory_way_point_offset(hrp::Vector3(i_param.stair_trajectory_way_point_offset[0], i_param.stair_trajectory_way_point_offset[1], i_param.stair_trajectory_way_point_offset[2]));
-  gg->set_cycloid_delay_kick_point_offset(hrp::Vector3(i_param.cycloid_delay_kick_point_offset[0], i_param.cycloid_delay_kick_point_offset[1], i_param.cycloid_delay_kick_point_offset[2]));  
+  gg->set_cycloid_delay_kick_point_offset(hrp::Vector3(i_param.cycloid_delay_kick_point_offset[0], i_param.cycloid_delay_kick_point_offset[1], i_param.cycloid_delay_kick_point_offset[2]));
   gg->set_gravitational_acceleration(i_param.gravitational_acceleration);
   gg->set_toe_angle(i_param.toe_angle);
   gg->set_heel_angle(i_param.heel_angle);
@@ -1422,6 +1463,10 @@ bool AutoBalancer::getGaitGeneratorParam(OpenHRP::AutoBalancerService::GaitGener
   for (size_t i = 0; i < 3; i++) i_param.stair_trajectory_way_point_offset[i] = tmpv(i);
   tmpv = gg->get_cycloid_delay_kick_point_offset();
   for (size_t i = 0; i < 3; i++) i_param.cycloid_delay_kick_point_offset[i] = tmpv(i);
+  tmpv = gg->get_swing_leg_take_off_vel();
+  for (size_t i = 0; i < 3; i++) i_param.swing_leg_take_off_vel[i] = tmpv(i);
+  tmpv = gg->get_swing_leg_landing_vel();
+  for (size_t i = 0; i < 3; i++) i_param.swing_leg_landing_vel[i] = tmpv(i);
   i_param.swing_trajectory_delay_time_offset = gg->get_swing_trajectory_delay_time_offset();
   i_param.swing_trajectory_final_distance_weight = gg->get_swing_trajectory_final_distance_weight();
   i_param.gravitational_acceleration = gg->get_gravitational_acceleration();
