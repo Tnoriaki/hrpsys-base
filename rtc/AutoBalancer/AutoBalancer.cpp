@@ -694,16 +694,20 @@ void AutoBalancer::getTargetParameters()
           // for skate//
           double u_f = 0.5;
           if( gg->get_lcg_count() > gg->get_one_step_count() * (1 - gg->get_default_double_support_ratio_before())){
-              if ( m_force[1].data[2] < std::sqrt( m_force[0].data[1] * m_force[0].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0)) ) / u_f){
-                  m_force[1].data[2] = std::sqrt( m_force[0].data[1] * m_force[0].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0))) / u_f;
+              if ( m_force[1].data[2] < std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0)) ) / u_f){
+                  m_force[1].data[2] = std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0))) / u_f;
                   m_force[0].data[2] = M * G - m_force[1].data[2];
               }
           }else if( gg->get_lcg_count() < gg->get_one_step_count() * (gg->get_default_double_support_ratio_after())){
-              if ( m_force[1].data[2] < std::sqrt( m_force[0].data[1] * m_force[0].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0)) ) / u_f && gg->get_swing_leg_acc()(0) > 0){
-                  m_force[1].data[2] = std::sqrt( m_force[0].data[1] * m_force[0].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0))) / u_f;
+              if ( m_force[1].data[2] < std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0)) ) / u_f && gg->get_swing_leg_acc()(0) > 0){
+                  m_force[1].data[2] = std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0))) / u_f;
                   m_force[0].data[2] = M * G - m_force[1].data[2];
               }
           }
+          m_force[0].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * alpha;
+          m_force[1].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * (1 - alpha);
+          m_force[0].data[4] = ((ee_pos[0](0) - ref_zmp(0)) * m_force[0].data[2] + (ee_pos[1](0) - ref_zmp(0)) * m_force[1].data[2]) * alpha;
+          m_force[1].data[4] = ((ee_pos[0](0) - ref_zmp(0)) * m_force[0].data[2] + (ee_pos[1](0) - ref_zmp(0)) * m_force[1].data[2]) * (1 - alpha);
       }
       // set limbCOPOffset
       {

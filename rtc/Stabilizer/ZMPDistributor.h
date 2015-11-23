@@ -521,7 +521,7 @@ public:
     {
         size_t ee_num = ee_name.size();
         std::vector<double> alpha_vector(ee_num), fz_alpha_vector(ee_num);
-        if ( use_cop_distribution ) {
+        if ( use_cop_distribution == false) {
             //calcAlphaVectorFromCOP(alpha_vector, fz_alpha_vector, cop_pos, ee_name, new_refzmp, ref_zmp);
             calcAlphaVectorFromCOPDistance(alpha_vector, fz_alpha_vector, cop_pos, ee_name, new_refzmp, ref_zmp);
         } else {
@@ -608,8 +608,8 @@ public:
             }
             Hmat += Cmat.transpose() * CW * Cmat;
         }
-        std::cerr << "H " << Hmat << std::endl;
-        std::cerr << "g " << gvec << std::endl;
+        // std::cerr << "H " << Hmat << std::endl;
+        // std::cerr << "g " << gvec << std::endl;
         solveForceMomentQPOASES(ff, state_dim, ee_num, Hmat, gvec);
         hrp::dvector tmpv(3);
         for (size_t fidx = 0; fidx < ee_num; fidx++) {
