@@ -833,9 +833,6 @@ namespace rats
               std::vector<leg_type> tmp_sup_types = get_support_leg_types();
               std::vector<leg_type> tmp_swg_types = get_swing_leg_types();
               std::copy(tmp_swg_types.begin(), tmp_swg_types.end(), std::back_inserter(tmp_sup_types));
-              if ( get_swing_leg_take_off_vel() != hrp::Vector3::Zero() ){
-                return get_swing_leg_types();
-              }
               return tmp_sup_types;
           }
       };
