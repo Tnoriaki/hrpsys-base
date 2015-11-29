@@ -60,6 +60,8 @@ AutoBalancer::AutoBalancer(RTC::Manager* manager)
       m_controlSwingSupportTimeOut("controlSwingSupportTime", m_controlSwingSupportTime),
       m_cogOut("cogOut", m_cog),
       m_AutoBalancerServicePort("AutoBalancerService"),
+      m_walkingStatesOut("walkingStates", m_walkingStates),
+      m_sbpCogOffsetOut("sbpCogOffset", m_sbpCogOffset),
       // </rtc-template>
       move_base_gain(0.8),
       m_robot(hrp::BodyPtr()),
@@ -99,6 +101,8 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
     addOutPort("contactStates", m_contactStatesOut);
     addOutPort("controlSwingSupportTime", m_controlSwingSupportTimeOut);
     addOutPort("cogOut", m_cogOut);
+    addOutPort("walkingStates", m_walkingStatesOut);
+    addOutPort("sbpCogOffset", m_sbpCogOffsetOut);
   
     // Set service provider to Ports
     m_AutoBalancerServicePort.registerProvider("service0", "AutoBalancerService", m_service0);
@@ -249,6 +253,7 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
       gg->set_default_zmp_offsets(default_zmp_offsets);
     }
     gg_is_walking = gg_solved = false;
+    m_walkingStates.data = false;
     fix_leg_coords = coordinates();
 
     // load virtual force sensors
@@ -318,7 +323,7 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
 
     is_stop_mode = false;
     has_ik_failed = false;
-    is_hand_fix_mode = true;
+    is_hand_fix_mode = false;
 
     pos_ik_thre = 0.1*1e-3; // [m]
     rot_ik_thre = (1e-2)*M_PI/180.0; // [rad]
@@ -520,6 +525,11 @@ RTC::ReturnCode_t AutoBalancer::onExecute(RTC::UniqueId ec_id)
       m_cog.data.y = ref_cog(1);
       m_cog.data.z = ref_cog(2);
       m_cog.tm = m_qRef.tm;
+      // sbpCogOffset
+      m_sbpCogOffset.data.x = sbp_cog_offset(0);
+      m_sbpCogOffset.data.y = sbp_cog_offset(1);
+      m_sbpCogOffset.data.z = sbp_cog_offset(2);
+      m_sbpCogOffset.tm = m_qRef.tm;
     }
     m_basePosOut.write();
     m_baseRpyOut.write();
@@ -527,6 +537,7 @@ RTC::ReturnCode_t AutoBalancer::onExecute(RTC::UniqueId ec_id)
     m_basePoseOut.write();
     m_zmpOut.write();
     m_cogOut.write();
+    m_sbpCogOffsetOut.write();
 
     // reference acceleration
     hrp::Sensor* sen = m_robot->sensor<hrp::RateGyroSensor>("gyrometer");
@@ -546,6 +557,9 @@ RTC::ReturnCode_t AutoBalancer::onExecute(RTC::UniqueId ec_id)
     m_contactStatesOut.write();
     m_controlSwingSupportTime.tm = m_qRef.tm;
     m_controlSwingSupportTimeOut.write();
+    m_walkingStates.data = gg_is_walking;
+    m_walkingStates.tm = m_qRef.tm;
+    m_walkingStatesOut.write();
 
     for (unsigned int i=0; i<m_ref_forceOut.size(); i++){
         m_force[i].tm = m_qRef.tm;
@@ -920,9 +934,11 @@ void AutoBalancer::fixLegToCoords (const hrp::Vector3& fix_pos, const hrp::Matri
   // get current foot mid pos + rot
   std::vector<coordinates> foot_coords;
   for (size_t i = 0; i < leg_names.size(); i++) {
-      ABCIKparam& tmpikp = ikp[leg_names[i]];
-      foot_coords.push_back(coordinates((tmpikp.target_link->p + tmpikp.target_link->R * tmpikp.localPos),
-                                        (tmpikp.target_link->R * tmpikp.localR)));
+      if (leg_names[i].find("leg") != std::string::npos) {
+          ABCIKparam& tmpikp = ikp[leg_names[i]];
+          foot_coords.push_back(coordinates((tmpikp.target_link->p + tmpikp.target_link->R * tmpikp.localPos),
+                                            (tmpikp.target_link->R * tmpikp.localR)));
+      }
   }
   coordinates current_foot_mid_coords;
   multi_mid_coords(current_foot_mid_coords, foot_coords);
@@ -1123,7 +1139,9 @@ void AutoBalancer::stopWalking ()
 {
   std::vector<coordinates> tmp_end_coords_list;
   for (std::vector<string>::iterator it = leg_names.begin(); it != leg_names.end(); it++) {
-      tmp_end_coords_list.push_back(ikp[*it].target_end_coords);
+      if ((*it).find("leg") != std::string::npos) {
+          tmp_end_coords_list.push_back(ikp[*it].target_end_coords);
+      }
   }
   multi_mid_coords(fix_leg_coords, tmp_end_coords_list);
   fixLegToCoords(fix_leg_coords.pos, fix_leg_coords.rot);
@@ -1527,17 +1545,24 @@ bool AutoBalancer::setAutoBalancerParam(const OpenHRP::AutoBalancerService::Auto
                                                                           i_param.graspless_manip_reference_trans_rot[2],
                                                                           i_param.graspless_manip_reference_trans_rot[3]).normalized().toRotationMatrix()); // rtc: (x, y, z, w) but eigen: (w, x, y, z)
   transition_time = i_param.transition_time;
-  if (leg_names_interpolator->isEmpty()) {
-      leg_names.clear();
-      for (size_t i = 0; i < i_param.leg_names.length(); i++) {
-          leg_names.push_back(std::string(i_param.leg_names[i]));
-      }
-      if (control_mode == MODE_ABC) {
-          double tmp_ratio = 0.0;
-          leg_names_interpolator->set(&tmp_ratio);
-          tmp_ratio = 1.0;
-          leg_names_interpolator->go(&tmp_ratio, 5.0, true);
-          control_mode = MODE_SYNC_TO_ABC;
+  std::vector<std::string> cur_leg_names, dst_leg_names;
+  cur_leg_names = leg_names;
+  for (size_t i = 0; i < i_param.leg_names.length(); i++) {
+      dst_leg_names.push_back(std::string(i_param.leg_names[i]));
+  }
+  std::sort(cur_leg_names.begin(), cur_leg_names.end());
+  std::sort(dst_leg_names.begin(), dst_leg_names.end());
+  if (cur_leg_names != dst_leg_names) {
+      if (leg_names_interpolator->isEmpty()) {
+          leg_names.clear();
+          leg_names = dst_leg_names;
+          if (control_mode == MODE_ABC) {
+              double tmp_ratio = 0.0;
+              leg_names_interpolator->set(&tmp_ratio);
+              tmp_ratio = 1.0;
+              leg_names_interpolator->go(&tmp_ratio, 5.0, true);
+              control_mode = MODE_SYNC_TO_ABC;
+          }
       }
   } else {
       std::cerr << "[" << m_profile.instance_name << "]   leg_names cannot be set because interpolating." << std::endl;
@@ -1549,6 +1574,20 @@ bool AutoBalancer::setAutoBalancerParam(const OpenHRP::AutoBalancerService::Auto
       std::cerr << "[" << m_profile.instance_name << "]   is_hand_fix_mode = " << is_hand_fix_mode << std::endl;
   } else {
       std::cerr << "[" << m_profile.instance_name << "]   is_hand_fix_mode cannot be set in (gg_is_walking = true). Current is_hand_fix_mode is " << (is_hand_fix_mode?"true":"false") << std::endl;
+  }
+  if (control_mode == MODE_IDLE) {
+      for (size_t i = 0; i < i_param.end_effector_list.length(); i++) {
+          std::map<std::string, ABCIKparam>::iterator it = ikp.find(std::string(i_param.end_effector_list[i].leg));
+          memcpy(it->second.localPos.data(), i_param.end_effector_list[i].pos, sizeof(double)*3);
+          it->second.localR = (Eigen::Quaternion<double>(i_param.end_effector_list[i].rot[0], i_param.end_effector_list[i].rot[1], i_param.end_effector_list[i].rot[2], i_param.end_effector_list[i].rot[3])).normalized().toRotationMatrix();
+      }
+  } else {
+      std::cerr << "[" << m_profile.instance_name << "] cannot change end-effectors except during MODE_IDLE" << std::endl;
+  }
+  for (std::map<std::string, ABCIKparam>::iterator it = ikp.begin(); it != ikp.end(); it++) {
+      std::cerr << "[" << m_profile.instance_name << "] End Effector [" << it->first << "]" << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "]   localpos = " << it->second.localPos.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[m]" << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "]   localR = " << it->second.localR.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", "\n", "    [", "]")) << std::endl;
   }
 
   std::cerr << "[" << m_profile.instance_name << "]   move_base_gain = " << move_base_gain << std::endl;
@@ -1611,6 +1650,16 @@ bool AutoBalancer::getAutoBalancerParam(OpenHRP::AutoBalancerService::AutoBalanc
   i_param.pos_ik_thre = pos_ik_thre;
   i_param.rot_ik_thre = rot_ik_thre;
   i_param.is_hand_fix_mode = is_hand_fix_mode;
+  i_param.end_effector_list.length(ikp.size());
+  {
+      size_t i = 0;
+      for (std::map<std::string, ABCIKparam>::const_iterator it = ikp.begin(); it != ikp.end(); it++) {
+          copyRatscoords2Footstep(i_param.end_effector_list[i],
+                                  coordinates(it->second.localPos, it->second.localR));
+          i_param.end_effector_list[i].leg = it->first.c_str();
+          i++;
+      }
+  }
   return true;
 };
 

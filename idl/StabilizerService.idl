@@ -2,12 +2,15 @@
  * @file StabilizerService.idl
  * @brief Services for the stabilizer interface
  */
+#include "AutoBalancerService.idl"
+
 module OpenHRP
 {
   interface StabilizerService
   {
     typedef double DblArray2[2];
     typedef double DblArray3[3];
+    typedef double DblArray4[4];
     typedef sequence<boolean> BoolSequence;
 
     /**
@@ -156,8 +159,8 @@ module OpenHRP
       BoolSequence is_zmp_calc_enable;
       /// COP margin [m] from edges for COP checking
       double cop_check_margin;
-      /// CP margin [m]
-      double cp_check_margin;
+      /// CP margin [m] (front, rear, inside, outside)
+      DblArray4 cp_check_margin;
       /// ref_CP [m] (x,y) (foot_origin relative coordinate)
       DblArray2 ref_capture_point;
       /// act_CP [m] (x,y) (foot_origin relative coordinate)
@@ -168,6 +171,9 @@ module OpenHRP
       sequence< sequence<double, 3> > foot_origin_offset;
       /// Emergency signal checking mode
       EmergencyCheckMode emergency_check_mode;
+      sequence<AutoBalancerService::Footstep> end_effector_list;
+      /// whether an emergency stop is used while walking
+      boolean is_estop_while_walking;
     };
 
     /**
