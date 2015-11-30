@@ -668,7 +668,7 @@ public:
             ref_foot_moment[fidx](0) = -tmpv(1);
             ref_foot_moment[fidx](1) = -tmpv(2);
         }
-        if (printp == false) {
+        if (printp) {
             std::cerr << "[" << print_str << "] force moment distribution " << (use_cop_distribution ? "(QP COP)" : "(QP)") << std::endl;
             //std::cerr << "[" << print_str << "]   alpha = " << alpha << ", fz_alpha = " << fz_alpha << std::endl;
             // std::cerr << "[" << print_str << "]   "
