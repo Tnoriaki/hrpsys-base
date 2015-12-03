@@ -402,6 +402,7 @@ namespace rats
         } else if ( current_count < double_support_count_before ) { // first double support phase
           hoffarbib_interpolation_all ((double_support_count_before - current_count) * dt, start + take_off_vel * double_support_count_before * dt / 2.0, take_off_vel, hrp::Vector3::Zero());
         } else { // last double support phase
+          std::cerr << acc(2) << std::endl;
           acc(2) = 0;
           hoffarbib_interpolation((one_step_count - current_count) * dt, goal);
           if(current_count == one_step_count) {
@@ -551,7 +552,7 @@ namespace rats
       {
         std::vector<hrp::Vector3> cycloid_path;
         hrp::Vector3 tmpv, via_goal(goal);
-        double ratio = 0.4;
+        double ratio = 0.01;
         via_goal(2) += ratio*height;
         double tmpheight = ((start(2)+goal(2))/2.0+height-(start(2)+via_goal(2))/2.0);
         /* cycloid_path.push_back(start); */
