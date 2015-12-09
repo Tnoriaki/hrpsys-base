@@ -580,11 +580,11 @@ public:
           double fz_alpha_reff;
           double steepness = 8; // change ration from alpha to beta (steepness >= 4)
           double r = - 1/(1+exp(-6*steepness*(fz_alpha_vector[0]-1+1/steepness))) + 1/(1+exp(-6*steepness*(fz_alpha_vector[0]-1/steepness)));
-          std::cerr << "r: " << r << std::endl;
+          // std::cerr << "r: " << r << std::endl;
           fz_alpha_reff = ref_foot_force[0](2) / (ref_foot_force[0](2) + ref_foot_force[1](2));
           fz_alpha_vector[0] = r * fz_alpha_reff + ( 1 - r ) * fz_alpha_vector[0];
           fz_alpha_vector[1] = 1 - fz_alpha_vector[0];
-          std::cerr << "alpha: " << fz_alpha_vector[0] << std::endl;
+          // std::cerr << "alpha: " << fz_alpha_vector[0] << std::endl;
         }
         //
         // QP
