@@ -650,6 +650,30 @@ public:
         gen_and_plot_walk_pattern();
     };
 
+    void test15 ()
+    {
+        std::cerr << "test15 : kick walk version 2" << std::endl;
+        /* initialize sample footstep_list */
+        parse_params();
+        gg->clear_footstep_nodes_list();
+        gg->set_default_orbit_type(CYCLOIDDELAYKICK);
+        gg->set_default_step_time(3.0);
+        gg->set_default_double_support_ratio_before(0.333);
+        gg->set_default_double_support_ratio_after(0.333);
+        gg->set_default_double_support_static_ratio_before(0.166);
+        gg->set_default_double_support_static_ratio_after(0.166);
+        gg->set_default_double_support_ratio_swing_before(0.333);
+        gg->set_default_double_support_ratio_swing_after(0.333);
+        std::vector< std::vector<step_node> > fnsl;
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//for cog
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//start
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//equal
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//equal
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//stop
+        gg->set_foot_steps_list(fnsl);
+        gen_and_plot_walk_pattern();
+    };
+
 
     void parse_params ()
     {
@@ -686,6 +710,10 @@ public:
               if (++i < arg_strs.size()) gg->set_default_double_support_static_ratio_before(atof(arg_strs[i].c_str()));
           } else if ( arg_strs[i]== "--default-double-support-static-ratio-after" ) {
               if (++i < arg_strs.size()) gg->set_default_double_support_static_ratio_after(atof(arg_strs[i].c_str()));
+          } else if ( arg_strs[i]== "--default-double-support-ratio-swing-before" ) {
+              if (++i < arg_strs.size()) gg->set_default_double_support_ratio_swing_before(atof(arg_strs[i].c_str()));
+          } else if ( arg_strs[i]== "--default-double-support-ratio-swing-after" ) {
+              if (++i < arg_strs.size()) gg->set_default_double_support_ratio_swing_after(atof(arg_strs[i].c_str()));
           } else if ( arg_strs[i]== "--swing-trajectory-delay-time-offset" ) {
               if (++i < arg_strs.size()) gg->set_swing_trajectory_delay_time_offset(atof(arg_strs[i].c_str()));
           } else if ( arg_strs[i]== "--swing-trajectory-final-distance-weight" ) {
@@ -813,6 +841,8 @@ int main(int argc, char* argv[])
           tgg.test13();
       } else if (std::string(argv[1]) == "--test14") {
           tgg.test14();
+      } else if (std::string(argv[1]) == "--test15") {
+          tgg.test15();
       } else {
           print_usage();
           ret = 1;

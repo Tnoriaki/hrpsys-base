@@ -683,14 +683,6 @@ void AutoBalancer::getTargetParameters()
               ee_pos.push_back(tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[i]);
           }
           hrp::Vector3 tmp_ref_cog(m_robot->calcCM());
-          ref_zmp = gg->get_refzmp();
-          if( gg->get_lcg_count() > gg->get_one_step_count() * (1 - gg->get_default_double_support_ratio_before())){
-              ref_zmp(0) += gg->get_swing_leg_acc()(0) * tmp_ref_cog(2) / gg->get_gravitational_acceleration();
-          }else if( gg->get_lcg_count() < gg->get_one_step_count() * (gg->get_default_double_support_ratio_after())){
-              if(gg->get_swing_leg_acc()(0) > 0){
-                  ref_zmp(0) += gg->get_swing_leg_acc()(0) * tmp_ref_cog(2) / gg->get_gravitational_acceleration();
-              }
-          }
           double alpha = (ref_zmp - ee_pos[1]).norm() / (ee_pos[0] - ee_pos[1]).norm();
           if (alpha>1.0) alpha = 1.0;
           if (alpha<0.0) alpha = 0.0;
@@ -708,18 +700,10 @@ void AutoBalancer::getTargetParameters()
           m_force[1].data[2] = (1-alpha) * M * (cog_acc(2) + G);
           // for skate//
           double u_f = 0.5;
-          if( gg->get_lcg_count() > gg->get_one_step_count() * (1 - gg->get_default_double_support_ratio_before())){
-              m_force[1].data[0] = - M * gg->get_swing_leg_acc()(0);
-              if ( m_force[1].data[2] < std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0)) ) / u_f){
-                  m_force[1].data[2] = std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0))) / u_f;
-                  m_force[0].data[2] = M * G - m_force[1].data[2];
-              }
-          }else if( gg->get_lcg_count() < gg->get_one_step_count() * (gg->get_default_double_support_ratio_after())){
-              if ( gg->get_swing_leg_acc()(0) > 0) m_force[1].data[0] = - M * gg->get_swing_leg_acc()(0);
-              if ( m_force[1].data[2] < std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0)) ) / u_f && gg->get_swing_leg_acc()(0) > 0){
-                  m_force[1].data[2] = std::sqrt( m_force[1].data[1] * m_force[1].data[1] + (M * gg->get_swing_leg_acc()(0)) * (M * gg->get_swing_leg_acc()(0))) / u_f;
-                  m_force[0].data[2] = M * G - m_force[1].data[2];
-              }
+          m_force[1].data[0] = - M * gg->get_skate_acc()(0);
+          if ( m_force[1].data[2] < std::sqrt( m_force[1].data[1] * m_force[1].data[1] + m_force[1].data[0] * m_force[1].data[0] ) / u_f){
+              m_force[1].data[2] = std::sqrt( m_force[1].data[1] * m_force[1].data[1] + m_force[1].data[0] * m_force[1].data[0] ) / u_f;
+              m_force[0].data[2] = M * G - m_force[1].data[2];
           }
           m_force[0].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * alpha;
           m_force[1].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * (1 - alpha);
@@ -894,13 +878,6 @@ void AutoBalancer::getTargetParameters()
     ref_cog(2) = tmp_ref_cog(2);
     if (gg_is_walking) {
       ref_zmp = gg->get_refzmp();
-      if( gg->get_lcg_count() > gg->get_one_step_count() * (1 - gg->get_default_double_support_ratio_before())){
-        ref_zmp(0) += gg->get_swing_leg_acc()(0) * tmp_ref_cog(2) / gg->get_gravitational_acceleration();
-      }else if( gg->get_lcg_count() < gg->get_one_step_count() * (gg->get_default_double_support_ratio_after())){
-        if(gg->get_swing_leg_acc()(0) > 0){
-          ref_zmp(0) += gg->get_swing_leg_acc()(0) * tmp_ref_cog(2) / gg->get_gravitational_acceleration();
-        }
-      }
     } else {
       ref_zmp(0) = ref_cog(0);
       ref_zmp(1) = ref_cog(1);
