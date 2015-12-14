@@ -667,13 +667,36 @@ public:
         std::vector< std::vector<step_node> > fnsl;
         fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//for cog
         fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//start
-        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//equal
-        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//equal
+        // fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//equal
+        // fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//equal
         fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//stop
         gg->set_foot_steps_list(fnsl);
         gen_and_plot_walk_pattern();
     };
 
+    void test16 ()
+    {
+        std::cerr << "test15 : kick walk version 2" << std::endl;
+        /* initialize sample footstep_list */
+        parse_params();
+        gg->clear_footstep_nodes_list();
+        gg->set_default_orbit_type(CYCLOIDDELAYKICK);
+        gg->set_default_step_time(3.0);
+        gg->set_default_double_support_ratio_before(0.333);
+        gg->set_default_double_support_ratio_after(0.333);
+        gg->set_default_double_support_static_ratio_before(0.166);
+        gg->set_default_double_support_static_ratio_after(0.166);
+        gg->set_default_double_support_ratio_swing_before(0.333);
+        gg->set_default_double_support_ratio_swing_after(0.333);
+        std::vector< std::vector<step_node> > fnsl;
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//for cog
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//start
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//equal
+        // fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//equal
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//stop
+        gg->set_foot_steps_list(fnsl);
+        gen_and_plot_walk_pattern();
+    };
 
     void parse_params ()
     {
@@ -843,6 +866,8 @@ int main(int argc, char* argv[])
           tgg.test14();
       } else if (std::string(argv[1]) == "--test15") {
           tgg.test15();
+      } else if (std::string(argv[1]) == "--test16") {
+          tgg.test16();
       } else {
           print_usage();
           ret = 1;
