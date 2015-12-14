@@ -699,7 +699,7 @@ void AutoBalancer::getTargetParameters()
           m_force[0].data[2] = alpha * M * (cog_acc(2) + G);
           m_force[1].data[2] = (1-alpha) * M * (cog_acc(2) + G);
           // for skate//
-          double u_f = 0.5;
+          double u_f = 0.4;
           m_force[1].data[0] = - M * gg->get_skate_acc()(0);
           if ( m_force[1].data[2] < std::sqrt( m_force[1].data[1] * m_force[1].data[1] + m_force[1].data[0] * m_force[1].data[0] ) / u_f){
               m_force[1].data[2] = std::sqrt( m_force[1].data[1] * m_force[1].data[1] + m_force[1].data[0] * m_force[1].data[0] ) / u_f;

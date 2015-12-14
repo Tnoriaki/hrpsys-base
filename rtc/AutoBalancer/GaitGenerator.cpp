@@ -410,6 +410,8 @@ namespace rats
     double ratio = 0.5;
     if( height == 0 ){
       cdktg.get_trajectory_point(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height);
+    } else if ( footstep_num <= 3 ){ // for one_step_only
+      cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height, hrp::Vector3::Zero(), hrp::Vector3::Zero());
     } else if ( footstep_index == 1 ){
       cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height, hrp::Vector3::Zero(), cdktg.get_swing_leg_take_off_vel() * ratio);
     } else if ( footstep_index == footstep_num - 2 ){
@@ -479,18 +481,20 @@ namespace rats
             swing_leg_src_steps = tmp_swing_leg_src_steps;
         }
     }
-    //for skate
+    //for skate start
     double ratio_before = 1.0;
     double ratio_after = 1.0;
-    if ( current_footstep_index == 1 ){
-      ratio_after = 0.5;
-    }else if ( current_footstep_index == fnsl.size() - 1){
-      ratio_before = 0.5;
-    } else{
-      ratio_before = 0.5;
-      ratio_after = 0.5;
+    if (fnsl.size() > 3){
+      if ( current_footstep_index == 1 ){
+        ratio_after = 0.5;
+      }else if ( current_footstep_index == fnsl.size() - 1){
+        ratio_before = 0.5;
+      } else{
+        ratio_before = 0.5;
+        ratio_after = 0.5;
+      }
     }
-    //for skate
+    //for skate end
     calc_ratio_from_double_support_ratio(ratio_before * default_double_support_ratio_before, ratio_after * default_double_support_ratio_after);
     swing_leg_steps.clear();
     calc_current_swing_leg_steps(swing_leg_steps, current_step_height, current_toe_angle, current_heel_angle, fnsl.size());
@@ -587,7 +591,9 @@ namespace rats
     hrp::Vector3 rzmp;
     std::vector<hrp::Vector3> sfzos;
     bool refzmp_exist_p;
-    if ( lcg.get_footstep_index() == 0 || lcg.get_footstep_index() == footstep_nodes_list.size()-2){
+    if ( footstep_nodes_list.size() <= 3 ) {
+      refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after);
+    }else if ( lcg.get_footstep_index() == 0 || lcg.get_footstep_index() == footstep_nodes_list.size()-2){
       refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after);
     } else {
       refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before/2.0, default_double_support_ratio_after/2.0, default_double_support_static_ratio_before/2.0, default_double_support_static_ratio_after/2.0);

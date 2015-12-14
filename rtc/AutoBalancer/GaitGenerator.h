@@ -388,13 +388,15 @@ namespace rats
       };
       void get_trajectory_point_for_skate (hrp::Vector3& ret, const hrp::Vector3& start, const hrp::Vector3& goal, const double height, const hrp::Vector3& start_vel, const hrp::Vector3& goal_vel)
       {
-        ///
+        /// set paramter
         hrp::Vector3 take_off_dist = take_off_vel * double_support_count_before * dt / 2.0;
         double double_support_count_before_for_skate = double_support_count_before;
         double double_support_count_after_for_skate = double_support_count_after;
         if ( start_vel != hrp::Vector3::Zero() ) double_support_count_before_for_skate *= 0.5;
         if ( goal_vel != hrp::Vector3::Zero() ) double_support_count_after_for_skate *= 0.5;
-        ///
+        /// tmp
+        landing_vel = hrp::Vector3::Zero();
+        /// tmp
         if ( current_count == 0 ){
           acc = 3.0 * start_vel / (double_support_count_before * dt);
           vel = start_vel + acc * dt;
