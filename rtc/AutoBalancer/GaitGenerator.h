@@ -216,6 +216,7 @@ namespace rats
       toe_heel_phase_counter* thp_ptr;
       bool use_toe_heel_transition;
       boost::shared_ptr<interpolator> zmp_weight_interpolator;
+      std::vector<size_t> same_footstep_index_list;
       void calc_current_refzmp (hrp::Vector3& ret, std::vector<hrp::Vector3>& swing_foot_zmp_offsets, const double default_double_support_ratio_before, const double default_double_support_ratio_after, const double default_double_support_static_ratio_before, const double default_double_support_static_ratio_after);
       const bool is_start_double_support_phase () const { return refzmp_index == 0; };
       const bool is_second_phase () const { return refzmp_index == 1; };
@@ -228,7 +229,7 @@ namespace rats
         : refzmp_cur_list(), foot_x_axises_list(), swing_leg_types_list(), step_count_list(), default_zmp_offsets(),
           refzmp_index(0), refzmp_count(0), one_step_count(0),
           toe_zmp_offset_x(0), heel_zmp_offset_x(0), dt(_dt),
-          thp_ptr(_thp_ptr), use_toe_heel_transition(false)
+          thp_ptr(_thp_ptr), use_toe_heel_transition(false), same_footstep_index_list()
       {
           default_zmp_offsets.push_back(hrp::Vector3::Zero());
           default_zmp_offsets.push_back(hrp::Vector3::Zero());
@@ -260,12 +261,16 @@ namespace rats
         foot_x_axises_list.clear();
         swing_leg_types_list.clear();
         step_count_list.clear();
+        same_footstep_index_list.clear();
       };
       void push_refzmp_from_footstep_nodes_for_dual (const std::vector<step_node>& fns,
                                                      const std::vector<step_node>& _support_leg_steps,
                                                      const std::vector<step_node>& _swing_leg_steps);
       void push_refzmp_from_footstep_nodes_for_single (const std::vector<step_node>& fns, const std::vector<step_node>& _support_leg_stepsconst);
       void update_refzmp (const std::vector< std::vector<step_node> >& fnsl);
+      void push_same_footstep_index (const size_t _same_footstep_index){
+        same_footstep_index_list.push_back(_same_footstep_index);
+      }
       // setter
       void set_indices (const size_t idx) { refzmp_index = idx; };
       void set_refzmp_count(const size_t _refzmp_count) { refzmp_count = _refzmp_count; };

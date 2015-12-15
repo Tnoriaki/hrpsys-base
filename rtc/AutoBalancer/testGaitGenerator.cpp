@@ -692,7 +692,7 @@ public:
         fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//for cog
         fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//start
         fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//equal
-        // fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//equal
+        fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//equal
         fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), 0, 0)));//stop
         gg->set_foot_steps_list(fnsl);
         gen_and_plot_walk_pattern();

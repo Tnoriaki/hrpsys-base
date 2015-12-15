@@ -146,26 +146,62 @@ namespace rats
             zmp_diff *= 0.5;
         }
     }
+    // for same footstep
+    bool is_same_footstep_phase = false;
+    size_t same_refzmp_index;
+    size_t last_same_refzmp_index;
+    if (same_footstep_index_list.size() > 0){
+        same_refzmp_index = same_footstep_index_list[0] - 1;
+        last_same_refzmp_index = same_footstep_index_list.back();
+        for ( size_t it = 0; it != same_footstep_index_list.size(); it++ ) {
+            if ( same_footstep_index_list[it] == refzmp_index ) is_same_footstep_phase = true;
+        }
+    }
     // Calculate total reference ZMP
     if (is_start_double_support_phase() || is_end_double_support_phase()) {
         ret = refzmp_cur_list[refzmp_index];
-    } else if ( cnt < double_support_static_count_half_before ) { // Start double support static period
-        ret = refzmp_cur_list[0] + zmp_diff * foot_x_axises_list[0].front();
-    } else if ( cnt > one_step_count - double_support_static_count_half_after ) { // End double support static period
-        ret = refzmp_cur_list[0] + zmp_diff * foot_x_axises_list[0].front();
-    } else if ( cnt < double_support_count_half_before ) { // Start double support period
-        hrp::Vector3 current_support_zmp = refzmp_cur_list[1];
-        hrp::Vector3 prev_support_zmp = refzmp_cur_list[0] + zmp_diff * foot_x_axises_list[0].front();
-        double ratio = 1.0 / (double_support_count_half_before-double_support_static_count_half_before) * (double_support_count_half_before-cnt);
+     } else if ( cnt < double_support_static_count_half_before ) { // Start double support static period
+        hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index];
+        hrp::Vector3 prev_support_zmp = refzmp_cur_list[refzmp_index-1] + zmp_diff * foot_x_axises_list[refzmp_index-1].front();
+        if ( is_same_footstep_phase ){ // for same footstep
+            current_support_zmp = refzmp_cur_list[same_refzmp_index];
+            prev_support_zmp = refzmp_cur_list[refzmp_index] + zmp_diff * foot_x_axises_list[refzmp_index].front();
+        }
+        double ratio = (is_second_phase()?1.0:0.5);
         ret = (1 - ratio) * current_support_zmp + ratio * prev_support_zmp;
-    } else if ( cnt > one_step_count - double_support_count_half_after ) { // End double support period
-        hrp::Vector3 current_support_zmp = refzmp_cur_list[0] + zmp_diff * foot_x_axises_list[1].front();
-        hrp::Vector3 prev_support_zmp = refzmp_cur_list[1];
-        double ratio = 1.0 / (double_support_count_half_after-double_support_static_count_half_after) * (cnt - 1 - (one_step_count - double_support_count_half_after));
+     } else if ( cnt > one_step_count - double_support_static_count_half_after ) { // End double support static period
+        hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index+1] + zmp_diff * foot_x_axises_list[refzmp_index+1].front();
+        hrp::Vector3 prev_support_zmp = refzmp_cur_list[refzmp_index];
+        if ( is_same_footstep_phase ){ // for same footstep
+            current_support_zmp = refzmp_cur_list[refzmp_index] + zmp_diff * foot_x_axises_list[refzmp_index].front();
+            if ( refzmp_index == last_same_refzmp_index ) current_support_zmp = refzmp_cur_list[refzmp_index+1] + zmp_diff * foot_x_axises_list[refzmp_index+1].front();
+            prev_support_zmp = refzmp_cur_list[same_refzmp_index];
+        }
+        double ratio = (is_second_last_phase()?1.0:0.5);
         ret = (1 - ratio) * prev_support_zmp + ratio * current_support_zmp;
-    } else {
-        ret = refzmp_cur_list[1];
-      }
+     } else if ( cnt < double_support_count_half_before ) { // Start double support period
+        hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index];
+        hrp::Vector3 prev_support_zmp = refzmp_cur_list[refzmp_index-1] + zmp_diff * foot_x_axises_list[refzmp_index-1].front();
+        if ( is_same_footstep_phase ){ // for same footstep
+            current_support_zmp = refzmp_cur_list[same_refzmp_index];
+            prev_support_zmp = refzmp_cur_list[refzmp_index] + zmp_diff * foot_x_axises_list[refzmp_index].front();
+        }
+        double ratio = ((is_second_phase()?1.0:0.5) / (double_support_count_half_before-double_support_static_count_half_before)) * (double_support_count_half_before-cnt);
+        ret = (1 - ratio) * current_support_zmp + ratio * prev_support_zmp;
+     } else if ( cnt > one_step_count - double_support_count_half_after ) { // End double support period
+        hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index+1] + zmp_diff * foot_x_axises_list[refzmp_index+1].front();
+        hrp::Vector3 prev_support_zmp = refzmp_cur_list[refzmp_index];
+        if ( is_same_footstep_phase ){ // for same footstep
+            current_support_zmp = refzmp_cur_list[refzmp_index] + zmp_diff * foot_x_axises_list[refzmp_index].front();
+            if ( refzmp_index == last_same_refzmp_index ) current_support_zmp = refzmp_cur_list[refzmp_index+1] + zmp_diff * foot_x_axises_list[refzmp_index+1].front();
+            prev_support_zmp = refzmp_cur_list[same_refzmp_index];
+        }
+        double ratio = ((is_second_last_phase()?1.0:0.5) / (double_support_count_half_after-double_support_static_count_half_after)) * (cnt - 1 - (one_step_count - double_support_count_half_after));
+        ret = (1 - ratio) * prev_support_zmp + ratio * current_support_zmp;
+     } else {
+      ret = refzmp_cur_list[refzmp_index];
+      if ( is_same_footstep_phase ) ret = refzmp_cur_list[same_refzmp_index]; // for same footstep
+    }
   };
 
   void refzmp_generator::update_refzmp (const std::vector< std::vector<step_node> >& fnsl)
@@ -442,20 +478,21 @@ namespace rats
             swing_leg_src_steps = tmp_swing_leg_src_steps;
         }
     }
-    //for skate start
+    //for skate
     double ratio_before = 1.0;
     double ratio_after = 1.0;
-    if (fnsl.size() > 3){
-      if ( current_footstep_index == 1 ){
-        ratio_after = 0.5;
-      }else if ( current_footstep_index == fnsl.size() - 1){
-        ratio_before = 0.5;
-      } else{
-        ratio_before = 0.5;
-        ratio_after = 0.5;
-      }
+    if ( default_orbit_type == CYCLOIDDELAYKICK ){
+        if (fnsl.size() > 3){
+            if ( current_footstep_index == 1 ){
+                ratio_after = 0.5;
+            }else if ( current_footstep_index == fnsl.size() - 1){
+                ratio_before = 0.5;
+            } else{
+                ratio_before = 0.5;
+                ratio_after = 0.5;
+            }
+        }
     }
-    //for skate end
     calc_ratio_from_double_support_ratio(ratio_before * default_double_support_ratio_before, ratio_after * default_double_support_ratio_after);
     swing_leg_steps.clear();
     calc_current_swing_leg_steps(swing_leg_steps, current_step_height, current_toe_angle, current_heel_angle, fnsl.size());
@@ -535,7 +572,12 @@ namespace rats
     /* make another */
     lcg.set_swing_support_steps_list(footstep_nodes_list);
     for (size_t i = 1; i < footstep_nodes_list.size()-1; i++) {
-        rg.push_refzmp_from_footstep_nodes_for_single(footstep_nodes_list.at(i), lcg.get_support_leg_steps_idx(i));
+        if ( i > 1 && footstep_nodes_list.at(i).front().l_r == footstep_nodes_list.at(i - 1).front().l_r ){// for same footstep
+            rg.push_same_footstep_index(i);
+            rg.push_refzmp_from_footstep_nodes_for_single(footstep_nodes_list.at(i), lcg.get_swing_leg_dst_steps_idx(i));
+        } else {
+            rg.push_refzmp_from_footstep_nodes_for_single(footstep_nodes_list.at(i), lcg.get_support_leg_steps_idx(i));
+        }
     }
     rg.push_refzmp_from_footstep_nodes_for_dual(footstep_nodes_list.back(),
                                                 lcg.get_support_leg_steps_idx(footstep_nodes_list.size()-1),
@@ -550,15 +592,16 @@ namespace rats
     bool refzmp_exist_p;
     // for skate
     double ratio = 1.0;
-    if (footstep_nodes_list.size() == 4){
-        if (lcg.get_footstep_index() == 1) ratio = 0.5;
-    }
-    if (footstep_nodes_list.size() > 4){
-        if ( lcg.get_footstep_index() != 0 || lcg.get_footstep_index() != footstep_nodes_list.size()-2){
-            ratio = 0.5;
+    if ( lcg.get_default_orbit_type() == CYCLOIDDELAYKICK ){
+        if (footstep_nodes_list.size() == 4){
+            if (lcg.get_footstep_index() == 1) ratio = 0.5;
+        }
+        if (footstep_nodes_list.size() > 4){
+            if ( lcg.get_footstep_index() != 0 || lcg.get_footstep_index() != footstep_nodes_list.size()-2){
+                ratio = 0.5;
+            }
         }
     }
-    // for skate
     refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before * ratio, default_double_support_ratio_after * ratio, default_double_support_static_ratio_before * ratio, default_double_support_static_ratio_after * ratio);
     if (!refzmp_exist_p) {
       finalize_count++;
