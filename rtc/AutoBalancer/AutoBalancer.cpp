@@ -913,11 +913,9 @@ void AutoBalancer::fixLegToCoords (const hrp::Vector3& fix_pos, const hrp::Matri
   // get current foot mid pos + rot
   std::vector<coordinates> foot_coords;
   for (size_t i = 0; i < leg_names.size(); i++) {
-      if (leg_names[i].find("leg") != std::string::npos) {
-          ABCIKparam& tmpikp = ikp[leg_names[i]];
-          foot_coords.push_back(coordinates((tmpikp.target_link->p + tmpikp.target_link->R * tmpikp.localPos),
-                                            (tmpikp.target_link->R * tmpikp.localR)));
-      }
+      ABCIKparam& tmpikp = ikp[leg_names[i]];
+      foot_coords.push_back(coordinates((tmpikp.target_link->p + tmpikp.target_link->R * tmpikp.localPos),
+                                        (tmpikp.target_link->R * tmpikp.localR)));
   }
   coordinates current_foot_mid_coords;
   multi_mid_coords(current_foot_mid_coords, foot_coords);
@@ -1118,9 +1116,7 @@ void AutoBalancer::stopWalking ()
 {
   std::vector<coordinates> tmp_end_coords_list;
   for (std::vector<string>::iterator it = leg_names.begin(); it != leg_names.end(); it++) {
-      if ((*it).find("leg") != std::string::npos) {
-          tmp_end_coords_list.push_back(ikp[*it].target_end_coords);
-      }
+      tmp_end_coords_list.push_back(ikp[*it].target_end_coords);
   }
   multi_mid_coords(fix_leg_coords, tmp_end_coords_list);
   fixLegToCoords(fix_leg_coords.pos, fix_leg_coords.rot);
@@ -1407,6 +1403,7 @@ bool AutoBalancer::setGaitGeneratorParam(const OpenHRP::AutoBalancerService::Gai
   gg->set_use_toe_heel_transition(i_param.use_toe_heel_transition);
   gg->set_zmp_weight_map(boost::assign::map_list_of<leg_type, double>(RLEG, i_param.zmp_weight_map[0])(LLEG, i_param.zmp_weight_map[1])(RARM, i_param.zmp_weight_map[2])(LARM, i_param.zmp_weight_map[3]));
   gg->set_optional_go_pos_finalize_footstep_num(i_param.optional_go_pos_finalize_footstep_num);
+  gg->set_overwritable_footstep_index_offset(i_param.overwritable_footstep_index_offset);
 
   // print
   gg->print_param(std::string(m_profile.instance_name));
@@ -1479,6 +1476,7 @@ bool AutoBalancer::getGaitGeneratorParam(OpenHRP::AutoBalancerService::GaitGener
   i_param.zmp_weight_map[2] = tmp_zmp_weight_map[RARM];
   i_param.zmp_weight_map[3] = tmp_zmp_weight_map[LARM];
   i_param.optional_go_pos_finalize_footstep_num = gg->get_optional_go_pos_finalize_footstep_num();
+  i_param.overwritable_footstep_index_offset = gg->get_overwritable_footstep_index_offset();
   return true;
 };
 
