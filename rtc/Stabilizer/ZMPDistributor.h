@@ -578,7 +578,7 @@ public:
         // kojima's law
         {
           double fz_alpha_reff;
-          double fz_alpha = (ee_pos[1] - ref_zmp).norm() / (ee_pos[0] - ee_pos[2]).norm();
+          double fz_alpha = (ee_pos[1] - ref_zmp).norm() / (ee_pos[0] - ee_pos[1]).norm();
           double steepness = 8; // change ration from alpha to beta (steepness >= 4)
           double r = - 1/(1+exp(-6*steepness*(fz_alpha-1+1/steepness))) + 1/(1+exp(-6*steepness*(fz_alpha-1/steepness)));
           fz_alpha_reff = ref_foot_force[0](2) / (ref_foot_force[0](2) + ref_foot_force[1](2));
