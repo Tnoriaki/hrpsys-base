@@ -569,27 +569,34 @@ public:
     {
         size_t ee_num = ee_name.size();
         std::vector<double> alpha_vector(ee_num), fz_alpha_vector(ee_num);
-        if ( use_cop_distribution ) {
+        if ( use_cop_distribution == false) {
             //calcAlphaVectorFromCOP(alpha_vector, fz_alpha_vector, cop_pos, ee_name, new_refzmp, ref_zmp);
             calcAlphaVectorFromCOPDistance(alpha_vector, fz_alpha_vector, cop_pos, ee_name, new_refzmp, ref_zmp);
         } else {
             calcAlphaVector(alpha_vector, fz_alpha_vector, ee_pos, ee_rot, ee_name, new_refzmp, ref_zmp);
         }
         // kojima's law
-        {
-          double fz_alpha_reff;
-          double fz_alpha = (ee_pos[1] - ref_zmp).norm() / (ee_pos[0] - ee_pos[1]).norm();
-          double steepness = 8; // change ration from alpha to beta (steepness >= 4)
-          double r = - 1/(1+exp(-6*steepness*(fz_alpha-1+1/steepness))) + 1/(1+exp(-6*steepness*(fz_alpha-1/steepness)));
-          fz_alpha_reff = ref_foot_force[0](2) / (ref_foot_force[0](2) + ref_foot_force[1](2));
-          fz_alpha_vector[0] = r * fz_alpha_reff + ( 1 - r ) * fz_alpha_vector[0];
-          fz_alpha_vector[1] = 1 - fz_alpha_vector[0];
-        }
+        // {
+        //   double fz_alpha_reff;
+        //   double fz_alpha = (ee_pos[1] - ref_zmp).norm() / (ee_pos[0] - ee_pos[1]).norm();
+        //   double steepness = 8; // change ration from alpha to beta (steepness >= 4)
+        //   double r = - 1/(1+exp(-6*steepness*(fz_alpha-1+1/steepness))) + 1/(1+exp(-6*steepness*(fz_alpha-1/steepness)));
+        //   fz_alpha_reff = ref_foot_force[0](2) / (ref_foot_force[0](2) + ref_foot_force[1](2));
+        //   fz_alpha_vector[0] = r * fz_alpha_reff + ( 1 - r ) * fz_alpha_vector[0];
+        //   fz_alpha_vector[1] = 1 - fz_alpha_vector[0];
+        // }
         //
         // QP
         double norm_weight = 1e-7;
         double cop_weight = 1e-3;
-        double ref_force_weight = 0.0;
+        double ref_force_weight = 1.0;
+        // tmp
+        std::cerr << "diff of zmp: " << (ref_zmp - new_refzmp).norm() << std::endl;
+        double gain = 100;
+        ref_force_weight *= 2.0 / (1 + exp( gain * (ref_zmp - new_refzmp).norm()));
+        if ( ref_force_weight < 0.001 ) ref_force_weight = 0.001;
+        std::cerr << "ref_force_weight: " << ref_force_weight << std::endl;
+        //
         hrp::dvector total_fm(3);
         total_fm(0) = total_fz;
         total_fm(1) = 0;
