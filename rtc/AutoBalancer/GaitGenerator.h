@@ -432,8 +432,8 @@ namespace rats
         ret = pos;
         current_count++;
       };
-      double get_swing_trajectory_delay_time_offset () { return time_offset; };
-      double get_swing_trajectory_final_distance_weight () { return final_distance_weight; };
+      double get_swing_trajectory_delay_time_offset () const { return time_offset; };
+      double get_swing_trajectory_final_distance_weight () const { return final_distance_weight; };
       hrp::Vector3 get_swing_leg_take_off_vel () const { return take_off_vel; };
       hrp::Vector3 get_swing_leg_landing_vel () { return landing_vel; };
       hrp::Vector3 get_skate_acc () { return skate_acc; };
