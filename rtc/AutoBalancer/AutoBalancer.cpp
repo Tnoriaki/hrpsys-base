@@ -133,7 +133,7 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
     if (!loadBodyFromModelLoader(m_robot, prop["model"].c_str(), 
                                  CosNaming::NamingContext::_duplicate(naming.getRootContext())
                                  )){
-      std::cerr << m_profile.instance_name << " failed to load model[" << prop["model"] << "]" << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "] failed to load model[" << prop["model"] << "]" << std::endl;
       return RTC::RTC_ERROR;
     }
 
@@ -181,7 +181,7 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
           coil::stringTo(tmpv[j], end_effectors_str[i*prop_num+6+j].c_str());
         }
         tp.localR = Eigen::AngleAxis<double>(tmpv[3], hrp::Vector3(tmpv[0], tmpv[1], tmpv[2])).toRotationMatrix(); // rotation in VRML is represented by axis + angle
-        tp.manip = hrp::JointPathExPtr(new hrp::JointPathEx(m_robot, m_robot->link(ee_base), m_robot->link(ee_target), m_dt, false));
+        tp.manip = hrp::JointPathExPtr(new hrp::JointPathEx(m_robot, m_robot->link(ee_base), m_robot->link(ee_target), m_dt, false, std::string(m_profile.instance_name)));
         // Fix for toe joint
         //   Toe joint is defined as end-link joint in the case that end-effector link != force-sensor link
         //   Without toe joints, "end-effector link == force-sensor link" is assumed.
@@ -857,7 +857,7 @@ void AutoBalancer::getTargetParameters()
     }
     //
     {
-        if ( gg_is_walking && gg->get_lcg_count() == static_cast<size_t>(gg->get_default_step_time()/(2*m_dt))-1) {
+        if ( gg_is_walking && gg->get_lcg_count() == gg->get_overwrite_check_timing()+2 ) {
             hrp::Vector3 vel_htc(calc_vel_from_hand_error(tmp_fix_coords));
             gg->set_offset_velocity_param(vel_htc(0), vel_htc(1) ,vel_htc(2));
         }//  else {
@@ -1159,18 +1159,26 @@ void AutoBalancer::waitABCTransition()
 }
 bool AutoBalancer::goPos(const double& x, const double& y, const double& th)
 {
-  if ( !gg_is_walking && !is_stop_mode) {
+    //  if ( !gg_is_walking && !is_stop_mode) {
+  if ( !is_stop_mode) {
     gg->set_all_limbs(leg_names);
     coordinates start_ref_coords;
     mid_coords(start_ref_coords, 0.5, ikp["rleg"].target_end_coords, ikp["lleg"].target_end_coords);
-    gg->go_pos_param_2_footstep_nodes_list(x, y, th,
-                                           (y > 0 ? boost::assign::list_of(ikp["rleg"].target_end_coords) : boost::assign::list_of(ikp["lleg"].target_end_coords)),
-                                           start_ref_coords,
-                                           (y > 0 ? boost::assign::list_of(RLEG) : boost::assign::list_of(LLEG)));
-    startWalking();
-    return true;
+    bool ret = gg->go_pos_param_2_footstep_nodes_list(x, y, th,
+                                                      (y > 0 ? boost::assign::list_of(ikp["rleg"].target_end_coords) : boost::assign::list_of(ikp["lleg"].target_end_coords)), // Dummy if gg_is_walking
+                                                      start_ref_coords, // Dummy if gg_is_walking
+                                                      (y > 0 ? boost::assign::list_of(RLEG) : boost::assign::list_of(LLEG)), // Dummy if gg_is_walking
+                                                      (!gg_is_walking)); // If gg_is_walking, initialize. Otherwise, not initialize and overwrite footsteps.
+
+    if ( !gg_is_walking ) { // Initializing
+        startWalking();
+    }
+    if (!ret) {
+        std::cerr << "[" << m_profile.instance_name << "] Cannot goPos because of invalid timing." << std::endl;
+    }
+    return ret;
   } else {
-    std::cerr << "[" << m_profile.instance_name << "] Cannot goPos while walking." << std::endl;
+    std::cerr << "[" << m_profile.instance_name << "] Cannot goPos while stopping mode." << std::endl;
     return false;
   }
 }
@@ -1817,14 +1825,16 @@ hrp::Vector3 AutoBalancer::calc_vel_from_hand_error (const coordinates& tmp_fix_
     ref_hand_coords.transform(graspless_manip_reference_trans_coords); // desired arm coords
     hrp::Vector3 foot_pos(gg->get_dst_foot_midcoords().pos);
     if ( graspless_manip_arm == "arms" ) {
-      // act_hand_coords.pos = (target_coords["rarm"].pos + target_coords["larm"].pos) / 2.0;
-      // vector3 cur_y(target_coords["larm"].pos - target_coords["rarm"].pos);
-      // cur_y(2) = 0;
-      // alias(cur_y) = normalize(cur_y);
-      // vector3 ref_y(ref_hand_coords.axis(AXIS_Y));
-      // ref_y(2) = 0;
-      // alias(ref_y) = normalize(ref_y);
-      // dr = 0,0,((vector3(cross(ref_y, cur_y))(2) > 0 ? 1.0 : -1.0) * std::acos(dot(ref_y, cur_y))); // fix for rotation
+        hrp::Vector3 rarm_pos = ikp["rarm"].target_p0 + ikp["rarm"].target_r0 * ikp["rarm"].localPos;
+        hrp::Vector3 larm_pos = ikp["larm"].target_p0 + ikp["larm"].target_r0 * ikp["larm"].localPos;
+        act_hand_coords.pos = (rarm_pos+larm_pos)/2.0;
+        hrp::Vector3 act_y = larm_pos-rarm_pos;
+        act_y(2) = 0;
+        act_y.normalize();
+        hrp::Vector3 ref_y(ref_hand_coords.rot * hrp::Vector3::UnitY());
+        ref_y(2) = 0;
+        ref_y.normalize();
+        dr = hrp::Vector3(0,0,(hrp::Vector3(ref_y.cross(act_y))(2) > 0 ? 1.0 : -1.0) * std::acos(ref_y.dot(act_y))); // fix for rotation
     } else {
       ABCIKparam& tmpikp = ikp[graspless_manip_arm];
       act_hand_coords = rats::coordinates(tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos,
