@@ -589,13 +589,13 @@ public:
         // QP
         double norm_weight = 1e-7;
         double cop_weight = 1e-3;
-        double ref_force_weight = 1.0;
+        double ref_force_weight = 0.001;//1.0;
         // tmp
-        std::cerr << "diff of zmp: " << (ref_zmp - new_refzmp).norm() << std::endl;
-        double gain = 100;
-        ref_force_weight *= 2.0 / (1 + exp( gain * (ref_zmp - new_refzmp).norm()));
-        if ( ref_force_weight < 0.001 ) ref_force_weight = 0.001;
-        std::cerr << "ref_force_weight: " << ref_force_weight << std::endl;
+        // std::cerr << "diff of zmp: " << (ref_zmp - new_refzmp).norm() << std::endl;
+        // double gain = 100;
+        // ref_force_weight *= 2.0 / (1 + exp( gain * (ref_zmp - new_refzmp).norm()));
+        // if ( ref_force_weight < 0.001 ) ref_force_weight = 0.001;
+        // std::cerr << "ref_force_weight: " << ref_force_weight << std::endl;
         //
         hrp::dvector total_fm(3);
         total_fm(0) = total_fz;
@@ -677,6 +677,7 @@ public:
             tmpv = mm[fidx] * ff[fidx];
             // ref_foot_force[fidx] = hrp::Vector3(0,0,tmpv(0));
             // ref_foot_moment[fidx] = -1*hrp::Vector3(tmpv(1),tmpv(2),0);
+            std::cerr << "ref force :" << ref_foot_force[fidx](2) - tmpv(0) << std::endl;
             ref_foot_force[fidx](2) = tmpv(0);
             ref_foot_moment[fidx](0) = -tmpv(1);
             ref_foot_moment[fidx](1) = -tmpv(2);

@@ -280,6 +280,10 @@ module OpenHRP
       GaitType default_gait_type;
       /// Sequence for all end-effectors' ik limb parameters
       sequence<IKLimbParameters> ik_limb_parameters;
+      // Coefficiet of static friction
+      double mu;
+      // Coefficiet of rolling friction
+      double mu_rolling;
     };
 
     /**
