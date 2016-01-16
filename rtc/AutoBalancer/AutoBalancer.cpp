@@ -699,11 +699,18 @@ void AutoBalancer::getTargetParameters()
           m_force[0].data[2] = alpha * M * (cog_acc(2) + G);
           m_force[1].data[2] = (1-alpha) * M * (cog_acc(2) + G);
           // for skate//
-          double u_f = 0.4;
-          m_force[1].data[0] = - M * gg->get_skate_acc()(0);
+          double u_f = 0.5;
+          double u_rolling = 0.1; // 0.1;
+          // m_force[1].data[0] = - M * gg->get_skate_acc()(0);
+          if(gg->get_skate_acc()(0) != 0){
+              m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * u_rolling;
+          }else{
+              m_force[1].data[0] = - M * gg->get_skate_acc()(0);
+          }
           if ( m_force[1].data[2] < std::sqrt( m_force[1].data[1] * m_force[1].data[1] + m_force[1].data[0] * m_force[1].data[0] ) / u_f){
               m_force[1].data[2] = std::sqrt( m_force[1].data[1] * m_force[1].data[1] + m_force[1].data[0] * m_force[1].data[0] ) / u_f;
               m_force[0].data[2] = M * G - m_force[1].data[2];
+              m_force[1].data[0] = - M * gg->get_skate_acc()(0) + M * m_force[0].data[2] * u_rolling;
           }
           m_force[0].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * alpha;
           m_force[1].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * (1 - alpha);
