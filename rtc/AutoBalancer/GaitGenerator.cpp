@@ -404,17 +404,16 @@ namespace rats
   {
     mid_coords(ret, swing_rot_ratio, start, goal);
     cdktg.set_start_rot(hrp::Matrix33(start.rot));
-    double ratio = 0.5;
     if( height == 0 ){
-      cdktg.get_trajectory_point(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height);
-    } else if ( footstep_num <= 3 ){ // for one_step_only
-      cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height, hrp::Vector3::Zero(), hrp::Vector3::Zero());
-    } else if ( footstep_index == 1 ){
-      cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height, hrp::Vector3::Zero(), cdktg.get_swing_leg_take_off_vel() * ratio);
+        cdktg.get_trajectory_point(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height);
+    } else if ( footstep_num <= 3 ){ // for one step
+        cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height, false, false);
+    } else if ( footstep_index == 1 ){// for more two step
+        cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height, false, true);
     } else if ( footstep_index == footstep_num - 2 ){
-      cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height, cdktg.get_swing_leg_take_off_vel() * ratio, hrp::Vector3::Zero());
+        cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height, true, false);
     } else {
-      cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height, cdktg.get_swing_leg_take_off_vel() * ratio, cdktg.get_swing_leg_take_off_vel() * ratio);
+        cdktg.get_trajectory_point_for_skate(ret.pos, hrp::Vector3(start.pos), hrp::Vector3(goal.pos), height, true, true);
     }
   };
 
