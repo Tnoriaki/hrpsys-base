@@ -87,10 +87,20 @@ def demoSetParameter():
         print >> sys.stderr, "  setParameter() => OK", vcheck
     assert(vcheck)
 
-def checkActualBaseAttitude(thre=5.0):
-    rpy = rtm.readDataPort(hcf.rh.port("WAIST")).data.orientation
-    ret = abs(math.degrees(rpy.r)) < thre and abs(math.degrees(rpy.p)) < thre
-    print >> sys.stderr, "  actual base rpy = ", ret, "(", rpy, ")"
+def saveLogForCheckParameter(log_fname="/tmp/test-samplerobot-stabilizer-check-param"):
+    hcf.setMaxLogLength(1);hcf.clearLog();time.sleep(0.1);hcf.saveLog(log_fname)
+
+def checkParameterFromLog(port_name, log_fname="/tmp/test-samplerobot-stabilizer-check-param", save_log=True, rtc_name="SampleRobot(Robot)0"):
+    if save_log:
+        saveLogForCheckParameter(log_fname)
+    return map(float, open(log_fname+"."+rtc_name+"_"+port_name, "r").readline().split(" ")[1:-1])
+
+def checkActualBaseAttitude(thre=5.0): # degree
+    '''Check whether the robot falls down based on actual robot base-link attitude.
+    '''
+    act_rpy = checkParameterFromLog("WAIST")[3:]
+    ret = abs(math.degrees(act_rpy[0])) < thre and abs(math.degrees(act_rpy[1])) < thre
+    print >> sys.stderr, "  ret = ", ret, ", actual base rpy = (", act_rpy, ")"
     return ret
 
 def demoStartStopTPCCST ():
@@ -170,6 +180,34 @@ def demoSTLoadPattern ():
     else:
         print >> sys.stderr, "  This sample is neglected in High-gain mode simulation"
 
+def demoSTTurnWalk ():
+    print >> sys.stderr, "6. EEFMQP st + Turn walk"
+    if hcf.pdc:
+        stp = hcf.st_svc.getParameter()
+        stp.st_algorithm=OpenHRP.StabilizerService.EEFMQP
+        hcf.st_svc.setParameter(stp)
+        hcf.startAutoBalancer()
+        ggp = hcf.abc_svc.getGaitGeneratorParam()[1]
+        org_ggp = hcf.abc_svc.getGaitGeneratorParam()[1]
+        ggp.stride_parameter=[0.15, 0.15, 90.0, 0.05]
+        hcf.abc_svc.setGaitGeneratorParam(ggp)
+        hcf.co_svc.disableCollisionDetection()
+        hcf.startStabilizer ()
+        hcf.abc_svc.goPos(0,0,175);
+        hcf.abc_svc.waitFootSteps();
+        hcf.abc_svc.goPos(0.4,0.15,40);
+        hcf.abc_svc.waitFootSteps();
+        hcf.stopStabilizer ()
+        # Wait for non-st osscilation being samalpl
+        hcf.abc_svc.setGaitGeneratorParam(org_ggp)
+        hcf.co_svc.enableCollisionDetection()
+        ret = checkActualBaseAttitude()
+        if ret:
+            print >> sys.stderr, "  ST + Turnwalk => OK"
+        assert(ret)
+    else:
+        print >> sys.stderr, "  This sample is neglected in High-gain mode simulation"
+
 def demo():
     OPENHRP3_DIR=check_output(['pkg-config', 'openhrp3.1', '--variable=prefix']).rstrip()
     if os.path.exists(OPENHRP3_DIR+"/share/OpenHRP-3.1/sample/model/sample1_bush.wrl"):
@@ -180,6 +218,7 @@ def demo():
             demoStartStopTPCCST()
             demoStartStopEEFMQPST()
             demoSTLoadPattern()
+            demoSTTurnWalk()
     else:
         print >> sys.stderr, "Skip st test because of missing sample1_bush.wrl"
 

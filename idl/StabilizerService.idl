@@ -63,6 +63,23 @@ module OpenHRP
     };
 
     /**
+     * @enum IKLimbParameters
+     * @brief IKLimbParameters
+     */
+    struct IKLimbParameters {
+        /// Joint weight for Inverse Kinematics calculation.
+        sequence<double> ik_optional_weight_vector;
+        /// SR-inverse gain for inverse kinematics.
+        double sr_gain;
+        /// Avoid joint limit gain for inverse kinematics.
+        double avoid_gain;
+        /// Reference joint angles tracking gain for inverse kinematics.
+        double reference_gain;
+        /// Manipulability limit for inverse kinematics.
+        double manipulability_limit;
+    };
+
+    /**
      * @struct stParam
      * @brief Stabilizer Parameters.
      */
@@ -108,6 +125,8 @@ module OpenHRP
       sequence<sequence<double, 3> > eefm_swing_rot_spring_gain;
       /// Sequence of all swing leg end-effector position spring gain (x,y,z).
       sequence<sequence<double, 3> > eefm_swing_pos_spring_gain;
+      /// Sequence of all end-effector end-effector-frame moment limit [Nm]
+      sequence<sequence<double, 3> > eefm_ee_moment_limit;
       /// Sequence of all end-effector position compensation limit [m]
       sequence<double> eefm_pos_compensation_limit;
       /// Sequence of all end-effector rot compensation limit [rad]
@@ -178,6 +197,8 @@ module OpenHRP
       sequence<AutoBalancerService::Footstep> end_effector_list;
       /// whether an emergency stop is used while walking
       boolean is_estop_while_walking;
+      /// Sequence for all end-effectors' ik limb parameters
+      sequence<IKLimbParameters> ik_limb_parameters;
     };
 
     /**

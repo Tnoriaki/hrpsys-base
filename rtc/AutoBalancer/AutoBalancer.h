@@ -108,6 +108,7 @@ class AutoBalancer
   bool getFootstepParam(OpenHRP::AutoBalancerService::FootstepParam& i_param);
   bool adjustFootSteps(const OpenHRP::AutoBalancerService::Footstep& rfootstep, const OpenHRP::AutoBalancerService::Footstep& lfootstep);
   bool getRemainingFootstepSequence(OpenHRP::AutoBalancerService::FootstepSequence_out o_footstep, CORBA::Long& o_current_fs_idx);
+  bool getGoPosFootstepsSequence(const double& x, const double& y, const double& th, OpenHRP::AutoBalancerService::FootstepsSequence_out o_footstep);
   bool releaseEmergencyStop();
 
  protected:
@@ -185,11 +186,12 @@ class AutoBalancer
 
  private:
   struct ABCIKparam {
-    hrp::Vector3 target_p0, current_p0, localPos, adjust_interpolation_target_p0, adjust_interpolation_org_p0;
-    hrp::Matrix33 target_r0, current_r0, localR, adjust_interpolation_target_r0, adjust_interpolation_org_r0;
+    hrp::Vector3 target_p0, localPos, adjust_interpolation_target_p0, adjust_interpolation_org_p0;
+    hrp::Matrix33 target_r0, localR, adjust_interpolation_target_r0, adjust_interpolation_org_r0;
     rats::coordinates target_end_coords;
     hrp::Link* target_link;
     hrp::JointPathExPtr manip;
+    double avoid_gain, reference_gain;
     size_t pos_ik_error_count, rot_ik_error_count;
     bool is_active, has_toe_joint;
   };
@@ -213,6 +215,7 @@ class AutoBalancer
   {
       return (std::fabs(m_optionalData.data[contact_states_index_map[ee_name]]-1.0)<0.1)?true:false;
   };
+  bool calc_inital_support_legs(const double& y, std::vector<rats::coordinates>& initial_support_legs_coords, std::vector<rats::leg_type>& initial_support_legs, rats::coordinates& start_ref_coords);
 
   // for gg
   typedef boost::shared_ptr<rats::gait_generator> ggPtr;
@@ -220,11 +223,12 @@ class AutoBalancer
   bool gg_is_walking, gg_solved;
   // for abc
   hrp::Vector3 ref_cog, ref_zmp, prev_imu_sensor_pos, prev_imu_sensor_vel, hand_fix_initial_offset;
+  enum {BIPED, TROT, PACE, CRAWL, GALLOP} gait_type;
   enum {MODE_IDLE, MODE_ABC, MODE_SYNC_TO_IDLE, MODE_SYNC_TO_ABC} control_mode, return_control_mode;
   std::map<std::string, ABCIKparam> ikp;
   std::map<std::string, size_t> contact_states_index_map;
   std::map<std::string, hrp::VirtualForceSensorParam> m_vfs;
-  std::vector<std::string> sensor_names, leg_names;
+  std::vector<std::string> sensor_names, leg_names, ee_vec;
   hrp::dvector qorg, qrefv;
   hrp::Vector3 current_root_p, target_root_p;
   hrp::Matrix33 current_root_R, target_root_R;

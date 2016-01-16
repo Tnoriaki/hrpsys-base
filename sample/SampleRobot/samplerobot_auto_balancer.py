@@ -27,6 +27,7 @@ def init ():
     hcf = HrpsysConfigurator()
     hcf.getRTCList = hcf.getRTCListUnstable
     hcf.init ("SampleRobot(Robot)0", "$(PROJECT_DIR)/../model/sample1.wrl")
+    hcf.connectLoggerPort(hcf.abc, 'baseRpyOut') # Just for checking
     hcf.Groups = defJointGroups()
     # set initial pose from sample/controller/SampleController/etc/Sample.pos
     initial_pose = [-7.779e-005,  -0.378613,  -0.000209793,  0.832038,  -0.452564,  0.000244781,  0.31129,  -0.159481,  -0.115399,  -0.636277,  0,  0,  0.637045,  -7.77902e-005,  -0.378613,  -0.000209794,  0.832038,  -0.452564,  0.000244781,  0.31129,  0.159481,  0.115399,  -0.636277,  0,  0,  -0.637045,  0,  0,  0]
@@ -48,13 +49,21 @@ def testPoseList(pose_list, initial_pose):
         hcf.seq_svc.setJointAngles(initial_pose, 1.0)
         hcf.waitInterpolation()
 
+def saveLogForCheckParameter(log_fname="/tmp/test-samplerobot-auto-balancer-check-param"):
+    hcf.setMaxLogLength(1);hcf.clearLog();time.sleep(0.1);hcf.saveLog(log_fname)
+
+def checkParameterFromLog(port_name, log_fname="/tmp/test-samplerobot-auto-balancer-check-param", save_log=True, rtc_name="SampleRobot(Robot)0"):
+    if save_log:
+        saveLogForCheckParameter(log_fname)
+    return map(float, open(log_fname+"."+rtc_name+"_"+port_name, "r").readline().split(" ")[1:-1])
+
 def checkActualBaseAttitude(ref_rpy = None, thre=0.1): # degree
     '''Check whether the robot falls down based on actual robot base-link attitude.
     '''
-    act_rpy = rtm.readDataPort(hcf.rh.port("WAIST")).data.orientation
+    act_rpy = checkParameterFromLog("WAIST")[3:]
     if ref_rpy == None:
-        ref_rpy = rtm.readDataPort(hcf.abc.port("baseRpyOut")).data
-    ret = abs(math.degrees(act_rpy.r-ref_rpy.r)) < thre and abs(math.degrees(act_rpy.p-ref_rpy.p)) < thre
+        ref_rpy = checkParameterFromLog("baseRpyOut", rtc_name="sh", save_log=False)
+    ret = abs(math.degrees(act_rpy[0]-ref_rpy[0])) < thre and abs(math.degrees(act_rpy[1]-ref_rpy[1])) < thre
     print >> sys.stderr, "  ret = ", ret, ", actual base rpy = (", act_rpy, "), ", "reference base rpy = (", ref_rpy, ")"
     assert (ret)
     return ret
@@ -92,6 +101,39 @@ def checkGoPosParam (goalx, goaly, goalth, prev_dst_foot_midcoords):
     print >> sys.stderr, "  => ", ret
     assert(ret)
     return ret
+
+def calcVelListFromPosList(pos_list, dt):
+    '''Calculate velocity list from position list.
+    Element of pos_list and vel_list should be list like [0,0,0].
+    '''
+    vel_list=[]
+    ppos=pos_list[0]
+    for pos in pos_list:
+        vel_list.append(map(lambda x, y: (x-y)/dt, pos, ppos));
+        ppos=pos
+    return vel_list
+
+def checkTooLargeABCCogAcc (acc_thre = 5.0): # [m/s^2]
+    '''Check ABC too large cog acceleration.
+    This is used discontinuous cog trajectory.
+    '''
+    # Parse COG [m] and tm [s]
+    cog_list=[]
+    tm_list=[]
+    for line in open("/tmp/test-abc-log.abc_cogOut", "r"):
+        tm_list.append(float(line.split(" ")[0]));
+        cog_list.append(map(float, line.split(" ")[1:-1]));
+    cog_list=cog_list[:-1000] # ?? Neglect latter elements
+    dt = tm_list[1]-tm_list[0] # [s]
+    # Calculate velocity and acceleration
+    dcog_list=calcVelListFromPosList(cog_list, dt)
+    ddcog_list=calcVelListFromPosList(dcog_list, dt)
+    # Check max
+    max_cogx_acc = max(map(lambda x : abs(x[0]), ddcog_list))
+    max_cogy_acc = max(map(lambda x : abs(x[1]), ddcog_list))
+    ret = (max_cogx_acc < acc_thre) and (max_cogy_acc < acc_thre)
+    print >> sys.stderr, "  Check acc x = ", max_cogx_acc, ", y = ", max_cogy_acc, ", thre = ", acc_thre, "[m/s^2], ret = ", ret
+    assert(ret)
 
 def demoAutoBalancerFixFeet ():
     print >> sys.stderr, "1. AutoBalancer mode by fixing feet"
@@ -219,11 +261,19 @@ def demoGaitGeneratorGoPos():
 
 def demoGaitGeneratorGoVelocity():
     print >> sys.stderr, "2. goVelocity and goStop"
+    print >> sys.stderr, "  goVelocity few steps"
     hcf.abc_svc.goVelocity(-0.1, -0.05, -20)
     time.sleep(1)
     hcf.abc_svc.goStop()
     checkActualBaseAttitude()
-    print >> sys.stderr, "  goVelocity()=>OK"
+    print >> sys.stderr, "  goVelocity few steps=>OK"
+    print >> sys.stderr, "  Check discontinuity of COG by checking too large COG acc."
+    hcf.setMaxLogLength(10000)
+    hcf.clearLog()
+    hcf.abc_svc.goVelocity(0,0,0) # One step overwrite
+    hcf.abc_svc.goStop()
+    hcf.saveLog("/tmp/test-abc-log");
+    checkTooLargeABCCogAcc()
 
 def demoGaitGeneratorSetFootSteps():
     print >> sys.stderr, "3. setFootSteps"
@@ -474,7 +524,7 @@ def demoGaitGeneratorFixHand():
     abcp.is_hand_fix_mode=False
     abcp.default_zmp_offsets=[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
     hcf.abc_svc.setAutoBalancerParam(abcp)
-    ref_rpy = rtm.readDataPort(hcf.abc.port("baseRpyOut")).data
+    ref_rpy = checkParameterFromLog("baseRpyOut", rtc_name="abc")
     hcf.stopAutoBalancer()
     checkActualBaseAttitude(ref_rpy)
     print >> sys.stderr, "  Fix hand=>OK"
@@ -623,9 +673,9 @@ def demoGaitGeneratorSetFootStepsWithArms():
 
 def demoStandingPosResetting():
     print >> sys.stderr, "demoStandingPosResetting"
-    hcf.abc_svc.goPos(0,0,math.degrees(-1*rtm.readDataPort(hcf.rh.port("WAIST")).data.orientation.y));
+    hcf.abc_svc.goPos(0,0,math.degrees(-1*checkParameterFromLog("WAIST")[5])); # Rot yaw
     hcf.abc_svc.waitFootSteps()
-    hcf.abc_svc.goPos(0,-1*rtm.readDataPort(hcf.rh.port("WAIST")).data.position.y,0);
+    hcf.abc_svc.goPos(0,-1*checkParameterFromLog("WAIST")[1],0); # Pos Y
     hcf.abc_svc.waitFootSteps()
 
 def demo():

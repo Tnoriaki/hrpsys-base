@@ -234,6 +234,8 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
               }
           }
       }
+      ikp.avoid_gain = 0.001;
+      ikp.reference_gain = 0.01;
       stikp.push_back(ikp);
       jpe_v.push_back(hrp::JointPathExPtr(new hrp::JointPathEx(m_robot, m_robot->link(ee_base), m_robot->link(ee_target), dt, false, std::string(m_profile.instance_name))));
       // Fix for toe joint
@@ -304,6 +306,7 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
       ikp.eefm_pos_time_const_support = hrp::Vector3(1.5, 1.5, 1.5);
       ikp.eefm_pos_compensation_limit = 0.025;
       ikp.eefm_swing_pos_spring_gain = hrp::Vector3(0.0, 0.0, 0.0);
+      ikp.eefm_ee_moment_limit = hrp::Vector3(1e4, 1e4, 1e4); // Default limit [Nm] is too large. Same as no limit.
   }
   eefm_pos_time_const_swing = 0.08;
   eefm_pos_transition_time = 0.01;
@@ -873,6 +876,9 @@ void Stabilizer::getActualParameters ()
         ee_moment = foot_origin_rot.transpose() * ee_moment;
         if ( i == 0 ) f_diff += -1*sensor_force;
         else f_diff += sensor_force;
+        // Moment limitation
+        hrp::Matrix33 ee_R(target->R * ikp.localR);
+        ikp.ref_moment = ee_R * vlimit((ee_R.transpose() * ikp.ref_moment), ikp.eefm_ee_moment_limit);
         // calcDampingControl
         // d_foot_rpy and d_foot_pos is (actual) foot origin coords relative value because these use foot origin coords relative force & moment
         { // Rot
@@ -887,7 +893,7 @@ void Stabilizer::getActualParameters ()
             ikp.d_foot_pos = vlimit(ikp.d_foot_pos, -1 * ikp.eefm_pos_compensation_limit, ikp.eefm_pos_compensation_limit);
         }
         // Actual ee frame =>
-        ikp.ee_d_foot_rpy = (target->R * ikp.localR).transpose() * (foot_origin_rot * ikp.d_foot_rpy);
+        ikp.ee_d_foot_rpy = ee_R.transpose() * (foot_origin_rot * ikp.d_foot_rpy);
       }
 
       if (eefm_use_force_difference_control) {
@@ -1259,11 +1265,7 @@ void Stabilizer::calcTPCC() {
         m_robot->calcForwardKinematics();
         for (size_t i = 0; i < stikp.size(); i++) {
           if (is_ik_enable[i]) {
-              hrp::Link* target = m_robot->link(stikp[i].target_name);
-              hrp::Vector3 vel_p, vel_r;
-              vel_p = target_link_p[i] - target->p;
-              rats::difference_rotation(vel_r, target->R, target_link_R[i]);
-              jpe_v[i]->calcInverseKinematics2Loop(vel_p, vel_r, 1.0, 0.001, 0.01, &qrefv);
+              jpe_v[i]->calcInverseKinematics2Loop(target_link_p[i], target_link_R[i], 1.0, stikp[i].avoid_gain, stikp[i].reference_gain, &qrefv, transition_smooth_gain);
           }
         }
       }
@@ -1308,8 +1310,6 @@ void Stabilizer::calcEEForceMomentControl() {
           current_d_foot_pos.push_back(foot_origin_rot * stikp[i].d_foot_pos);
 
       // Feet and hands modification
-      hrp::Vector3 target_link_p[stikp.size()];
-      hrp::Matrix33 target_link_R[stikp.size()];
       std::vector<hrp::Vector3> tmpp_list; // modified ee Pos
       std::vector<hrp::Matrix33> tmpR_list; // modified ee Rot
 #define deg2rad(x) ((x) * M_PI / 180.0)
@@ -1326,8 +1326,6 @@ void Stabilizer::calcEEForceMomentControl() {
               // foot force independent damping control
               tmpp = target_ee_p[i] - current_d_foot_pos[i];
           } else {
-//               target_link_p[i] = target_ee_p[i];
-//               target_link_R[i] = target_ee_R[i];
             target_ee_diff_p[i] *= transition_smooth_gain;
             tmpp = target_ee_p[i] + eefm_ee_pos_error_p_gain * target_foot_origin_rot * target_ee_diff_p_filter[i]->passFilter(target_ee_diff_p[i]);// tempolarily disabled
             tmpR = target_ee_R[i];
@@ -1401,24 +1399,15 @@ void Stabilizer::calcEEForceMomentControl() {
               }
           }
       }
-      for (size_t i = 0; i < stikp.size(); i++){
-          // target at ee => target at link-origin
-          rats::rotm3times(target_link_R[i], tmpR_list.at(i), stikp[i].localR.transpose());
-          //target_link_p[i] = tmpp_list.at(i) - target_link_R[i] * stikp[i].localCOPPos;
-          target_link_p[i] = tmpp_list.at(i) - target_link_R[i] * stikp[i].localp;
-      }
       // solveIK
       //   IK target is link origin pos and rot, not ee pos and rot.
       for (size_t jj = 0; jj < 3; jj++) {
         for (size_t i = 0; i < stikp.size(); i++) {
           if (is_ik_enable[i]) {
-              hrp::Link* target = m_robot->link(stikp[i].target_name);
-              hrp::Vector3 vel_p, vel_r;
-              vel_p = target_link_p[i] - target->p;
-              rats::difference_rotation(vel_r, target->R, target_link_R[i]);
-              vel_p *= transition_smooth_gain;
-              vel_r *= transition_smooth_gain;
-              jpe_v[i]->calcInverseKinematics2Loop(vel_p, vel_r, 1.0, 0.001, 0.01, &qrefv);
+              jpe_v[i]->calcInverseKinematics2Loop(tmpp_list.at(i), tmpR_list.at(i), 1.0, 0.001, 0.01, &qrefv, transition_smooth_gain,
+                                                   //stikp[i].localCOPPos;
+                                                   stikp[i].localp,
+                                                   stikp[i].localR);
           }
         }
       }
@@ -1566,6 +1555,7 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
   i_stp.eefm_rot_damping_gain.length(stikp.size());
   i_stp.eefm_rot_compensation_limit.length(stikp.size());
   i_stp.eefm_swing_rot_spring_gain.length(stikp.size());
+  i_stp.eefm_ee_moment_limit.length(stikp.size());
   for (size_t j = 0; j < stikp.size(); j++) {
       i_stp.eefm_pos_damping_gain[j].length(3);
       i_stp.eefm_pos_time_const_support[j].length(3);
@@ -1573,6 +1563,7 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
       i_stp.eefm_rot_damping_gain[j].length(3);
       i_stp.eefm_rot_time_const[j].length(3);
       i_stp.eefm_swing_rot_spring_gain[j].length(3);
+      i_stp.eefm_ee_moment_limit[j].length(3);
       for (size_t i = 0; i < 3; i++) {
           i_stp.eefm_pos_damping_gain[j][i] = stikp[j].eefm_pos_damping_gain(i);
           i_stp.eefm_pos_time_const_support[j][i] = stikp[j].eefm_pos_time_const_support(i);
@@ -1580,6 +1571,7 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
           i_stp.eefm_rot_damping_gain[j][i] = stikp[j].eefm_rot_damping_gain(i);
           i_stp.eefm_rot_time_const[j][i] = stikp[j].eefm_rot_time_const(i);
           i_stp.eefm_swing_rot_spring_gain[j][i] = stikp[j].eefm_swing_rot_spring_gain(i);
+          i_stp.eefm_ee_moment_limit[j][i] = stikp[j].eefm_ee_moment_limit(i);
       }
       i_stp.eefm_pos_compensation_limit[j] = stikp[j].eefm_pos_compensation_limit;
       i_stp.eefm_rot_compensation_limit[j] = stikp[j].eefm_rot_compensation_limit;
@@ -1666,6 +1658,21 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
       // set
       i_stp.end_effector_list[i] = ret_ee;
   }
+  i_stp.ik_limb_parameters.length(jpe_v.size());
+  for (size_t i = 0; i < jpe_v.size(); i++) {
+      OpenHRP::StabilizerService::IKLimbParameters& ilp = i_stp.ik_limb_parameters[i];
+      ilp.ik_optional_weight_vector.length(jpe_v[i]->numJoints());
+      std::vector<double> ov;
+      ov.resize(jpe_v[i]->numJoints());
+      jpe_v[i]->getOptionalWeightVector(ov);
+      for (size_t j = 0; j < jpe_v[i]->numJoints(); j++) {
+          ilp.ik_optional_weight_vector[j] = ov[j];
+      }
+      ilp.sr_gain = jpe_v[i]->getSRGain();
+      ilp.avoid_gain = stikp[i].avoid_gain;
+      ilp.reference_gain = stikp[i].reference_gain;
+      ilp.manipulability_limit = jpe_v[i]->getManipulabilityLimit();
+  }
 };
 
 void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
@@ -1719,7 +1726,8 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
        i_stp.eefm_rot_damping_gain.length () == stikp.size() &&
        i_stp.eefm_rot_time_const.length () == stikp.size() &&
        i_stp.eefm_rot_compensation_limit.length () == stikp.size() &&
-       i_stp.eefm_swing_rot_spring_gain.length () == stikp.size() ) {
+       i_stp.eefm_swing_rot_spring_gain.length () == stikp.size() &&
+       i_stp.eefm_ee_moment_limit.length () == stikp.size() ) {
       is_damping_parameter_ok = true;
       for (size_t j = 0; j < stikp.size(); j++) {
           for (size_t i = 0; i < 3; i++) {
@@ -1729,6 +1737,7 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
               stikp[j].eefm_rot_damping_gain(i) = i_stp.eefm_rot_damping_gain[j][i];
               stikp[j].eefm_rot_time_const(i) = i_stp.eefm_rot_time_const[j][i];
               stikp[j].eefm_swing_rot_spring_gain(i) = i_stp.eefm_swing_rot_spring_gain[j][i];
+              stikp[j].eefm_ee_moment_limit(i) = i_stp.eefm_ee_moment_limit[j][i];
           }
           stikp[j].eefm_pos_compensation_limit = i_stp.eefm_pos_compensation_limit[j];
           stikp[j].eefm_rot_compensation_limit = i_stp.eefm_rot_compensation_limit[j];
@@ -1839,6 +1848,8 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
           std::cerr << "[" << m_profile.instance_name << "]   [" << stikp[j].ee_name << "] "
                     << "eefm_swing_pos_spring_gain = " << stikp[j].eefm_swing_pos_spring_gain.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << ", "
                     << "eefm_swing_rot_spring_gain = " << stikp[j].eefm_swing_rot_spring_gain.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << std::endl;
+          std::cerr << "[" << m_profile.instance_name << "]   [" << stikp[j].ee_name << "] "
+                    << "eefm_ee_moment_limit = " << stikp[j].eefm_ee_moment_limit.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[Nm]" << std::endl;
       }
   } else {
       std::cerr << "[" << m_profile.instance_name << "]   eefm damping parameters cannot be set because of invalid param." << std::endl;
@@ -1860,6 +1871,77 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
   std::cerr << "[" << m_profile.instance_name << "]  cop_check_margin = " << cop_check_margin << "[m]" << std::endl;
   std::cerr << "[" << m_profile.instance_name << "]  cp_check_margin = [" << cp_check_margin[0] << ", " << cp_check_margin[1] << ", " << cp_check_margin[2] << ", " << cp_check_margin[3] << "] [m]" << std::endl;
   std::cerr << "[" << m_profile.instance_name << "]  contact_decision_threshold = " << contact_decision_threshold << "[N]" << std::endl;
+  // IK limb parameters
+  std::cerr << "[" << m_profile.instance_name << "]  IK limb parameters" << std::endl;
+  bool is_ik_limb_parameter_valid_length = true;
+  if (i_stp.ik_limb_parameters.length() != jpe_v.size()) {
+      is_ik_limb_parameter_valid_length = false;
+      std::cerr << "[" << m_profile.instance_name << "]   ik_limb_parameters invalid length! Cannot be set. (input = " << i_stp.ik_limb_parameters.length() << ", desired = " << jpe_v.size() << ")" << std::endl;
+  } else {
+      for (size_t i = 0; i < jpe_v.size(); i++) {
+          if (jpe_v[i]->numJoints() != i_stp.ik_limb_parameters[i].ik_optional_weight_vector.length())
+              is_ik_limb_parameter_valid_length = false;
+      }
+      if (is_ik_limb_parameter_valid_length) {
+          for (size_t i = 0; i < jpe_v.size(); i++) {
+              const OpenHRP::StabilizerService::IKLimbParameters& ilp = i_stp.ik_limb_parameters[i];
+              std::vector<double> ov;
+              ov.resize(jpe_v[i]->numJoints());
+              for (size_t j = 0; j < jpe_v[i]->numJoints(); j++) {
+                  ov[j] = ilp.ik_optional_weight_vector[j];
+              }
+              jpe_v[i]->setOptionalWeightVector(ov);
+              jpe_v[i]->setSRGain(ilp.sr_gain);
+              stikp[i].avoid_gain = ilp.avoid_gain;
+              stikp[i].reference_gain = ilp.reference_gain;
+              jpe_v[i]->setManipulabilityLimit(ilp.manipulability_limit);
+          }
+      } else {
+          std::cerr << "[" << m_profile.instance_name << "]   ik_optional_weight_vector invalid length! Cannot be set. (input = [";
+          for (size_t i = 0; i < jpe_v.size(); i++) {
+              std::cerr << i_stp.ik_limb_parameters[i].ik_optional_weight_vector.length() << ", ";
+          }
+          std::cerr << "], desired = [";
+          for (size_t i = 0; i < jpe_v.size(); i++) {
+              std::cerr << jpe_v[i]->numJoints() << ", ";
+          }
+          std::cerr << "])" << std::endl;
+      }
+  }
+  if (is_ik_limb_parameter_valid_length) {
+      std::cerr << "[" << m_profile.instance_name << "]   ik_optional_weight_vectors = ";
+      for (size_t i = 0; i < jpe_v.size(); i++) {
+          std::vector<double> ov;
+          ov.resize(jpe_v[i]->numJoints());
+          jpe_v[i]->getOptionalWeightVector(ov);
+          std::cerr << "[";
+          for (size_t j = 0; j < jpe_v[i]->numJoints(); j++) {
+              std::cerr << ov[j] << " ";
+          }
+          std::cerr << "]";
+      }
+      std::cerr << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "]   sr_gains = [";
+      for (size_t i = 0; i < jpe_v.size(); i++) {
+          std::cerr << jpe_v[i]->getSRGain() << ", ";
+      }
+      std::cerr << "]" << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "]   avoid_gains = [";
+      for (size_t i = 0; i < stikp.size(); i++) {
+          std::cerr << stikp[i].avoid_gain << ", ";
+      }
+      std::cerr << "]" << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "]   reference_gains = [";
+      for (size_t i = 0; i < stikp.size(); i++) {
+          std::cerr << stikp[i].reference_gain << ", ";
+      }
+      std::cerr << "]" << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "]   manipulability_limits = [";
+      for (size_t i = 0; i < jpe_v.size(); i++) {
+          std::cerr << jpe_v[i]->getManipulabilityLimit() << ", ";
+      }
+      std::cerr << "]" << std::endl;
+  }
 }
 
 std::string Stabilizer::getStabilizerAlgorithmString (OpenHRP::StabilizerService::STAlgorithm _st_algorithm)
@@ -1920,6 +2002,21 @@ hrp::Vector3 Stabilizer::vlimit(const hrp::Vector3& value, double llimit_value, 
           ret(i) = ulimit_value;
       } else if (value(i) < llimit_value) {
           ret(i) = llimit_value;
+      } else {
+          ret(i) = value(i);
+      }
+  }
+  return ret;
+}
+
+hrp::Vector3 Stabilizer::vlimit(const hrp::Vector3& value, const hrp::Vector3& limit_value)
+{
+  hrp::Vector3 ret;
+  for (size_t i = 0; i < 3; i++) {
+      if (value(i) > limit_value(i)) {
+          ret(i) = limit_value(i);
+      } else if (value(i) < -1 * limit_value(i)) {
+          ret(i) = -1 * limit_value(i);
       } else {
           ret(i) = value(i);
       }

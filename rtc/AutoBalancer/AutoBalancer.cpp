@@ -63,6 +63,7 @@ AutoBalancer::AutoBalancer(RTC::Manager* manager)
       m_walkingStatesOut("walkingStates", m_walkingStates),
       m_sbpCogOffsetOut("sbpCogOffset", m_sbpCogOffset),
       // </rtc-template>
+      gait_type(BIPED),
       move_base_gain(0.8),
       m_robot(hrp::BodyPtr()),
       m_debugLevel(0)
@@ -150,14 +151,6 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
     // GaitGenerator requires abc_leg_offset and abc_stride_parameter in robot conf file
     // setting leg_pos from conf file
     coil::vstring leg_offset_str = coil::split(prop["abc_leg_offset"], ",");
-    std::vector<hrp::Vector3> leg_pos;
-    if (leg_offset_str.size() > 0) {
-      hrp::Vector3 leg_offset;
-      for (size_t i = 0; i < 3; i++) coil::stringTo(leg_offset(i), leg_offset_str[i].c_str());
-      std::cerr << "[" << m_profile.instance_name << "] abc_leg_offset = " << leg_offset.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[m]" << std::endl;
-      leg_pos.push_back(hrp::Vector3(-1*leg_offset));
-      leg_pos.push_back(hrp::Vector3(leg_offset));
-    }
     leg_names.push_back("rleg");
     leg_names.push_back("lleg");
 
@@ -194,9 +187,12 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
         } else {
             tp.has_toe_joint = false;
         }
+        tp.avoid_gain = 0.001;
+        tp.reference_gain = 0.01;
         tp.pos_ik_error_count = tp.rot_ik_error_count = 0;
         ikp.insert(std::pair<std::string, ABCIKparam>(ee_name , tp));
         ikp[ee_name].target_link = m_robot->link(ee_target);
+        ee_vec.push_back(ee_name);
         std::cerr << "[" << m_profile.instance_name << "] End Effector [" << ee_name << "]" << std::endl;
         std::cerr << "[" << m_profile.instance_name << "]   target = " << ikp[ee_name].target_link->name << ", base = " << ee_base << std::endl;
         std::cerr << "[" << m_profile.instance_name << "]   offset_pos = " << tp.localPos.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[m]" << std::endl;
@@ -214,6 +210,20 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
       }
       m_controlSwingSupportTime.data.length(num);
       for (size_t i = 0; i < num; i++) m_controlSwingSupportTime.data[i] = 0.0;
+    }
+    std::vector<hrp::Vector3> leg_pos;
+    if (leg_offset_str.size() > 0) {
+      hrp::Vector3 leg_offset;
+      for (size_t i = 0; i < 3; i++) coil::stringTo(leg_offset(i), leg_offset_str[i].c_str());
+      std::cerr << "[" << m_profile.instance_name << "] abc_leg_offset = " << leg_offset.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[m]" << std::endl;
+      leg_pos.push_back(hrp::Vector3(-1*leg_offset));
+      leg_pos.push_back(hrp::Vector3(leg_offset));
+    }
+    if (leg_pos.size() < ikp.size()) {
+        size_t tmp_leg_pos_size = leg_pos.size();
+        for (size_t i = 0; i < ikp.size() - tmp_leg_pos_size; i++) {
+            leg_pos.push_back(hrp::Vector3::Zero());
+        }
     }
 
     std::vector<std::pair<hrp::Link*, hrp::Link*> > interlocking_joints;
@@ -450,12 +460,6 @@ RTC::ReturnCode_t AutoBalancer::onExecute(RTC::UniqueId ec_id)
         solveLimbIK();
         rel_ref_zmp = m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p);
       } else {
-        for ( std::map<std::string, ABCIKparam>::iterator it = ikp.begin(); it != ikp.end(); it++ ) {
-          if (std::find(leg_names.begin(), leg_names.end(), it->first) != leg_names.end() ) {
-            it->second.current_p0 = it->second.target_link->p;
-            it->second.current_r0 = it->second.target_link->R;
-          }
-        }
         rel_ref_zmp = input_zmp;
       }
       // transition
@@ -914,8 +918,8 @@ void AutoBalancer::fixLegToCoords (const hrp::Vector3& fix_pos, const hrp::Matri
   std::vector<coordinates> foot_coords;
   for (size_t i = 0; i < leg_names.size(); i++) {
       ABCIKparam& tmpikp = ikp[leg_names[i]];
-      foot_coords.push_back(coordinates((tmpikp.target_link->p + tmpikp.target_link->R * tmpikp.localPos),
-                                        (tmpikp.target_link->R * tmpikp.localR)));
+      if (leg_names[i].find("leg") != std::string::npos) foot_coords.push_back(coordinates((tmpikp.target_link->p + tmpikp.target_link->R * tmpikp.localPos),
+                                                                                           (tmpikp.target_link->R * tmpikp.localR)));
   }
   coordinates current_foot_mid_coords;
   multi_mid_coords(current_foot_mid_coords, foot_coords);
@@ -930,16 +934,9 @@ void AutoBalancer::fixLegToCoords (const hrp::Vector3& fix_pos, const hrp::Matri
 
 bool AutoBalancer::solveLimbIKforLimb (ABCIKparam& param)
 {
-  param.current_p0 = param.target_link->p;
-  param.current_r0 = param.target_link->R;
-
-  hrp::Vector3 vel_p, vel_r;
-  vel_p = param.target_p0 - param.current_p0;
-  rats::difference_rotation(vel_r, param.current_r0, param.target_r0);
-  vel_p *= transition_interpolator_ratio * leg_names_interpolator_ratio;
-  vel_r *= transition_interpolator_ratio * leg_names_interpolator_ratio;
-  param.manip->calcInverseKinematics2Loop(vel_p, vel_r, 1.0, 0.001, 0.01, &qrefv);
+  param.manip->calcInverseKinematics2Loop(param.target_p0, param.target_r0, 1.0, param.avoid_gain, param.reference_gain, &qrefv, transition_interpolator_ratio * leg_names_interpolator_ratio);
   // IK check
+  hrp::Vector3 vel_p, vel_r;
   vel_p = param.target_p0 - param.target_link->p;
   rats::difference_rotation(vel_r, param.target_link->R, param.target_r0);
   if (vel_p.norm() > pos_ik_thre && transition_interpolator->isEmpty()) {
@@ -1116,7 +1113,7 @@ void AutoBalancer::stopWalking ()
 {
   std::vector<coordinates> tmp_end_coords_list;
   for (std::vector<string>::iterator it = leg_names.begin(); it != leg_names.end(); it++) {
-      tmp_end_coords_list.push_back(ikp[*it].target_end_coords);
+      if ((*it).find("leg") != std::string::npos) tmp_end_coords_list.push_back(ikp[*it].target_end_coords);
   }
   multi_mid_coords(fix_leg_coords, tmp_end_coords_list);
   fixLegToCoords(fix_leg_coords.pos, fix_leg_coords.rot);
@@ -1163,13 +1160,15 @@ bool AutoBalancer::goPos(const double& x, const double& y, const double& th)
   if ( !is_stop_mode) {
     gg->set_all_limbs(leg_names);
     coordinates start_ref_coords;
-    mid_coords(start_ref_coords, 0.5, ikp["rleg"].target_end_coords, ikp["lleg"].target_end_coords);
+    std::vector<coordinates> initial_support_legs_coords;
+    std::vector<leg_type> initial_support_legs;
+    bool is_valid_gait_type = calc_inital_support_legs(y, initial_support_legs_coords, initial_support_legs, start_ref_coords);
+    if (is_valid_gait_type == false) return false;
     bool ret = gg->go_pos_param_2_footstep_nodes_list(x, y, th,
-                                                      (y > 0 ? boost::assign::list_of(ikp["rleg"].target_end_coords) : boost::assign::list_of(ikp["lleg"].target_end_coords)), // Dummy if gg_is_walking
-                                                      start_ref_coords, // Dummy if gg_is_walking
-                                                      (y > 0 ? boost::assign::list_of(RLEG) : boost::assign::list_of(LLEG)), // Dummy if gg_is_walking
+                                                      initial_support_legs_coords, // Dummy if gg_is_walking
+                                                      start_ref_coords,            // Dummy if gg_is_walking
+                                                      initial_support_legs,        // Dummy if gg_is_walking
                                                       (!gg_is_walking)); // If gg_is_walking, initialize. Otherwise, not initialize and overwrite footsteps.
-
     if ( !gg_is_walking ) { // Initializing
         startWalking();
     }
@@ -1185,12 +1184,33 @@ bool AutoBalancer::goPos(const double& x, const double& y, const double& th)
 
 bool AutoBalancer::goVelocity(const double& vx, const double& vy, const double& vth)
 {
+  gg->set_all_limbs(leg_names);
   if (gg_is_walking && gg_solved) {
     gg->set_velocity_param(vx, vy, vth);
   } else {
     coordinates ref_coords;
     mid_coords(ref_coords, 0.5, ikp["rleg"].target_end_coords, ikp["lleg"].target_end_coords);
-    gg->initialize_velocity_mode(ref_coords, vx, vy, vth);
+    std::vector<leg_type> current_legs;
+    switch(gait_type) {
+    case BIPED:
+        current_legs = (vy > 0 ? boost::assign::list_of(RLEG) : boost::assign::list_of(LLEG));
+        break;
+    case TROT:
+        current_legs = (vy > 0 ? boost::assign::list_of(RLEG)(LARM) : boost::assign::list_of(LLEG)(RARM));
+        break;
+    case PACE:
+        current_legs = (vy > 0 ? boost::assign::list_of(RLEG)(RARM) : boost::assign::list_of(LLEG)(LARM));
+        break;
+    case CRAWL:
+        std::cerr << "[" << m_profile.instance_name << "] crawl walk[" << gait_type << "] is not implemented yet." << std::endl;
+        return false;
+    case GALLOP:
+        /* at least one leg shoud be in contact */
+        std::cerr << "[" << m_profile.instance_name << "] gallop walk[" << gait_type << "] is not implemented yet." << std::endl;
+        return false;
+    default: break;
+    }
+    gg->initialize_velocity_mode(ref_coords, vx, vy, vth, current_legs);
     startWalking();
   }
   return true;
@@ -1569,6 +1589,17 @@ bool AutoBalancer::setAutoBalancerParam(const OpenHRP::AutoBalancerService::Auto
   } else {
       std::cerr << "[" << m_profile.instance_name << "] cannot change end-effectors except during MODE_IDLE" << std::endl;
   }
+  if (i_param.default_gait_type == OpenHRP::AutoBalancerService::BIPED) {
+      gait_type = BIPED;
+  } else if (i_param.default_gait_type == OpenHRP::AutoBalancerService::TROT) {
+      gait_type = TROT;
+  } else if (i_param.default_gait_type == OpenHRP::AutoBalancerService::PACE) {
+      gait_type = PACE;
+  } else if (i_param.default_gait_type == OpenHRP::AutoBalancerService::CRAWL) {
+      gait_type = CRAWL;
+  } else if (i_param.default_gait_type == OpenHRP::AutoBalancerService::GALLOP) {
+      gait_type = GALLOP;
+  }
   for (std::map<std::string, ABCIKparam>::iterator it = ikp.begin(); it != ikp.end(); it++) {
       std::cerr << "[" << m_profile.instance_name << "] End Effector [" << it->first << "]" << std::endl;
       std::cerr << "[" << m_profile.instance_name << "]   localpos = " << it->second.localPos.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[m]" << std::endl;
@@ -1591,6 +1622,80 @@ bool AutoBalancer::setAutoBalancerParam(const OpenHRP::AutoBalancerService::Auto
   std::cerr << "[" << m_profile.instance_name << "]   transition_time = " << transition_time << "[s], zmp_transition_time = " << zmp_transition_time << "[s], adjust_footstep_transition_time = " << adjust_footstep_transition_time << "[s]" << std::endl;
   for (std::vector<std::string>::iterator it = leg_names.begin(); it != leg_names.end(); it++) std::cerr << "[" << m_profile.instance_name << "]   leg_names [" << *it << "]" << std::endl;
   std::cerr << "[" << m_profile.instance_name << "]   pos_ik_thre = " << pos_ik_thre << "[m], rot_ik_thre = " << rot_ik_thre << "[rad]" << std::endl;
+  std::cerr << "[" << m_profile.instance_name << "]   default_gait_type = " << gait_type << std::endl;
+  // IK limb parameters
+  std::cerr << "[" << m_profile.instance_name << "]  IK limb parameters" << std::endl;
+  bool is_ik_limb_parameter_valid_length = true;
+  if (i_param.ik_limb_parameters.length() != ee_vec.size()) {
+      is_ik_limb_parameter_valid_length = false;
+      std::cerr << "[" << m_profile.instance_name << "]   ik_limb_parameters invalid length! Cannot be set. (input = " << i_param.ik_limb_parameters.length() << ", desired = " << ee_vec.size() << ")" << std::endl;
+  } else {
+      for (size_t i = 0; i < ee_vec.size(); i++) {
+          if (ikp[ee_vec[i]].manip->numJoints() != i_param.ik_limb_parameters[i].ik_optional_weight_vector.length())
+              is_ik_limb_parameter_valid_length = false;
+      }
+      if (is_ik_limb_parameter_valid_length) {
+          for (size_t i = 0; i < ee_vec.size(); i++) {
+              ABCIKparam& param = ikp[ee_vec[i]];
+              const OpenHRP::AutoBalancerService::IKLimbParameters& ilp = i_param.ik_limb_parameters[i];
+              std::vector<double> ov;
+              ov.resize(param.manip->numJoints());
+              for (size_t j = 0; j < param.manip->numJoints(); j++) {
+                  ov[j] = ilp.ik_optional_weight_vector[j];
+              }
+              param.manip->setOptionalWeightVector(ov);
+              param.manip->setSRGain(ilp.sr_gain);
+              param.avoid_gain = ilp.avoid_gain;
+              param.reference_gain = ilp.reference_gain;
+              param.manip->setManipulabilityLimit(ilp.manipulability_limit);
+          }
+      } else {
+          std::cerr << "[" << m_profile.instance_name << "]   ik_optional_weight_vector invalid length! Cannot be set. (input = [";
+          for (size_t i = 0; i < ee_vec.size(); i++) {
+              std::cerr << i_param.ik_limb_parameters[i].ik_optional_weight_vector.length() << ", ";
+          }
+          std::cerr << "], desired = [";
+          for (size_t i = 0; i < ee_vec.size(); i++) {
+              std::cerr << ikp[ee_vec[i]].manip->numJoints() << ", ";
+          }
+          std::cerr << "])" << std::endl;
+      }
+  }
+  if (is_ik_limb_parameter_valid_length) {
+      std::cerr << "[" << m_profile.instance_name << "]   ik_optional_weight_vectors = ";
+      for (size_t i = 0; i < ee_vec.size(); i++) {
+          ABCIKparam& param = ikp[ee_vec[i]];
+          std::vector<double> ov;
+          ov.resize(param.manip->numJoints());
+          param.manip->getOptionalWeightVector(ov);
+          std::cerr << "[";
+          for (size_t j = 0; j < param.manip->numJoints(); j++) {
+              std::cerr << ov[j] << " ";
+          }
+          std::cerr << "]";
+      }
+      std::cerr << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "]   sr_gains = [";
+      for (size_t i = 0; i < ee_vec.size(); i++) {
+          std::cerr << ikp[ee_vec[i]].manip->getSRGain() << ", ";
+      }
+      std::cerr << "]" << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "]   avoid_gains = [";
+      for (size_t i = 0; i < ee_vec.size(); i++) {
+          std::cerr << ikp[ee_vec[i]].avoid_gain << ", ";
+      }
+      std::cerr << "]" << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "]   reference_gains = [";
+      for (size_t i = 0; i < ee_vec.size(); i++) {
+          std::cerr << ikp[ee_vec[i]].reference_gain << ", ";
+      }
+      std::cerr << "]" << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "]   manipulability_limits = [";
+      for (size_t i = 0; i < ee_vec.size(); i++) {
+          std::cerr << ikp[ee_vec[i]].manip->getManipulabilityLimit() << ", ";
+      }
+      std::cerr << "]" << std::endl;
+  }
   return true;
 };
 
@@ -1645,6 +1750,30 @@ bool AutoBalancer::getAutoBalancerParam(OpenHRP::AutoBalancerService::AutoBalanc
           i++;
       }
   }
+  switch(gait_type) {
+  case BIPED:  i_param.default_gait_type = OpenHRP::AutoBalancerService::BIPED;  break;
+  case TROT:   i_param.default_gait_type = OpenHRP::AutoBalancerService::TROT;   break;
+  case PACE:   i_param.default_gait_type = OpenHRP::AutoBalancerService::PACE;   break;
+  case CRAWL:  i_param.default_gait_type = OpenHRP::AutoBalancerService::CRAWL;  break;
+  case GALLOP: i_param.default_gait_type = OpenHRP::AutoBalancerService::GALLOP; break;
+  default: break;
+  }
+  i_param.ik_limb_parameters.length(ee_vec.size());
+  for (size_t i = 0; i < ee_vec.size(); i++) {
+      ABCIKparam& param = ikp[ee_vec[i]];
+      OpenHRP::AutoBalancerService::IKLimbParameters& ilp = i_param.ik_limb_parameters[i];
+      ilp.ik_optional_weight_vector.length(param.manip->numJoints());
+      std::vector<double> ov;
+      ov.resize(param.manip->numJoints());
+      param.manip->getOptionalWeightVector(ov);
+      for (size_t j = 0; j < param.manip->numJoints(); j++) {
+          ilp.ik_optional_weight_vector[j] = ov[j];
+      }
+      ilp.sr_gain = param.manip->getSRGain();
+      ilp.avoid_gain = param.avoid_gain;
+      ilp.reference_gain = param.reference_gain;
+      ilp.manipulability_limit = param.manip->getManipulabilityLimit();
+  }
   return true;
 };
 
@@ -1660,14 +1789,6 @@ void AutoBalancer::copyRatscoords2Footstep(OpenHRP::AutoBalancerService::Footste
 
 bool AutoBalancer::getFootstepParam(OpenHRP::AutoBalancerService::FootstepParam& i_param)
 {
-  std::vector<rats::coordinates> leg_coords;
-  for (size_t i = 0; i < leg_names.size(); i++) {
-      ABCIKparam& tmpikp = ikp[leg_names[i]];
-      leg_coords.push_back(coordinates(tmpikp.current_p0 + tmpikp.current_r0 * tmpikp.localPos,
-                                       tmpikp.current_r0 * tmpikp.localR));
-  }
-  copyRatscoords2Footstep(i_param.rleg_coords, leg_coords[0]);
-  copyRatscoords2Footstep(i_param.lleg_coords, leg_coords[1]);
   copyRatscoords2Footstep(i_param.support_leg_coords, gg->get_support_leg_steps().front().worldcoords);
   copyRatscoords2Footstep(i_param.swing_leg_coords, gg->get_swing_leg_steps().front().worldcoords);
   copyRatscoords2Footstep(i_param.swing_leg_src_coords, gg->get_swing_leg_src_steps().front().worldcoords);
@@ -1765,6 +1886,41 @@ bool AutoBalancer::getRemainingFootstepSequence(OpenHRP::AutoBalancerService::Fo
     }
 };
 
+bool AutoBalancer::getGoPosFootstepsSequence(const double& x, const double& y, const double& th, OpenHRP::AutoBalancerService::FootstepsSequence_out o_footstep)
+{
+    std::cerr << "[" << m_profile.instance_name << "] getGoPosFootstepsSequence" << std::endl;
+    o_footstep = new OpenHRP::AutoBalancerService::FootstepsSequence;
+    if (gg_is_walking) {
+        std::cerr << "[" << m_profile.instance_name << "] Cannot call getGoPosFootstepsSequence in walking" << std::endl;
+        return false;
+    } else {
+        gg->set_all_limbs(leg_names);
+        std::vector< std::vector<step_node> > new_footstep_nodes_list;
+        coordinates start_ref_coords;
+        std::vector<coordinates> initial_support_legs_coords;
+        std::vector<leg_type> initial_support_legs;
+        bool is_valid_gait_type = calc_inital_support_legs(y, initial_support_legs_coords, initial_support_legs, start_ref_coords);
+        if (is_valid_gait_type == false) return false;
+        /* go_pos_param_2_footstep_nodes_list_core is const member function  */
+        gg->go_pos_param_2_footstep_nodes_list_core (x, y, th,
+                                                     initial_support_legs_coords, start_ref_coords, initial_support_legs,
+                                                     new_footstep_nodes_list, true, 0);
+        o_footstep->length(new_footstep_nodes_list.size());
+        for (size_t i = 0; i < new_footstep_nodes_list.size(); i++) {
+            o_footstep[i].fs.length(new_footstep_nodes_list.at(i).size());
+            for (size_t j = 0; j < new_footstep_nodes_list.at(i).size(); j++) {
+                leg_type tmp_leg_type = new_footstep_nodes_list.at(i).at(j).l_r;
+                o_footstep[i].fs[j].leg = ((tmp_leg_type == RLEG) ? "rleg":
+                                           (tmp_leg_type == LLEG) ? "lleg":
+                                           (tmp_leg_type == RARM) ? "rarm":
+                                           "larm");
+                copyRatscoords2Footstep(o_footstep[i].fs[j], new_footstep_nodes_list.at(i).at(j).worldcoords);
+            }
+        }
+        return true;
+    }
+};
+
 void AutoBalancer::static_balance_point_proc_one(hrp::Vector3& tmp_input_sbp, const double ref_com_height)
 {
   hrp::Vector3 target_sbp = hrp::Vector3(0, 0, 0);
@@ -1855,6 +2011,39 @@ hrp::Vector3 AutoBalancer::calc_vel_from_hand_error (const coordinates& tmp_fix_
   } else {
     return hrp::Vector3::Zero();
   }
+};
+
+bool AutoBalancer::calc_inital_support_legs(const double& y, std::vector<coordinates>& initial_support_legs_coords, std::vector<leg_type>& initial_support_legs, coordinates& start_ref_coords) {
+    switch(gait_type) {
+    case BIPED:
+        initial_support_legs_coords = (y > 0 ?
+                                       boost::assign::list_of(ikp["rleg"].target_end_coords)
+                                       : boost::assign::list_of(ikp["lleg"].target_end_coords));
+        initial_support_legs = (y > 0 ? boost::assign::list_of(RLEG) : boost::assign::list_of(LLEG));
+        break;
+    case TROT:
+        initial_support_legs_coords = (y > 0 ?
+                                       boost::assign::list_of(ikp["rleg"].target_end_coords)(ikp["larm"].target_end_coords)
+                                       : boost::assign::list_of(ikp["lleg"].target_end_coords)(ikp["rarm"].target_end_coords));
+        initial_support_legs = (y > 0 ? boost::assign::list_of(RLEG)(LARM) : boost::assign::list_of(LLEG)(RARM));
+        break;
+    case PACE:
+        initial_support_legs_coords = (y > 0 ?
+                                       boost::assign::list_of(ikp["rleg"].target_end_coords)(ikp["rarm"].target_end_coords)
+                                       : boost::assign::list_of(ikp["lleg"].target_end_coords)(ikp["larm"].target_end_coords));
+        initial_support_legs = (y > 0 ? boost::assign::list_of(RLEG)(RARM) : boost::assign::list_of(LLEG)(LARM));
+        break;
+    case CRAWL:
+        std::cerr << "[" << m_profile.instance_name << "] crawl walk[" << gait_type << "] is not implemented yet." << std::endl;
+        return false;
+    case GALLOP:
+        /* at least one leg shoud be in contact */
+        std::cerr << "[" << m_profile.instance_name << "] gallop walk[" << gait_type << "] is not implemented yet." << std::endl;
+        return false;
+    default: break;
+    }
+    mid_coords(start_ref_coords, 0.5, ikp["rleg"].target_end_coords, ikp["lleg"].target_end_coords);
+    return true;
 };
 
 //
