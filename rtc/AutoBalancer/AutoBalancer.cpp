@@ -716,7 +716,7 @@ void AutoBalancer::getTargetParameters()
           if ( m_force[1].data[2] < std::sqrt( m_force[1].data[1] * m_force[1].data[1] + m_force[1].data[0] * m_force[1].data[0] ) / mu){
               m_force[1].data[2] = std::sqrt( m_force[1].data[1] * m_force[1].data[1] + m_force[1].data[0] * m_force[1].data[0] ) / mu;
               m_force[0].data[2] = M * G - m_force[1].data[2];
-              m_force[1].data[0] = - M * gg->get_skate_acc()(0) + M * m_force[0].data[2] * mu_rolling;
+              m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
           }
           m_force[0].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * alpha;
           m_force[1].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * (1 - alpha);
