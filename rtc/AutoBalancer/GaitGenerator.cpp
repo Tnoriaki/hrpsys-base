@@ -483,9 +483,11 @@ namespace rats
     if ( default_orbit_type == CYCLOIDDELAYKICK ){
         if (fnsl.size() > 3){
             if ( current_footstep_index == 1 ){
+                ratio_before = 1.0;
                 ratio_after = 0.5;
-            }else if ( current_footstep_index == fnsl.size() - 1){
+            }else if ( current_footstep_index == fnsl.size() - 2){
                 ratio_before = 0.5;
+                ratio_after = 1.0;
             } else{
                 ratio_before = 0.5;
                 ratio_after = 0.5;
