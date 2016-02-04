@@ -689,7 +689,7 @@ void AutoBalancer::getTargetParameters()
               ee_pos.push_back(tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[i]);
           }
           hrp::Vector3 tmp_ref_cog(m_robot->calcCM());
-          double alpha = (ref_zmp - ee_pos[1]).norm() / (ee_pos[0] - ee_pos[1]).norm();
+          double alpha = (ref_zmp - ee_pos[1]).norm() / ((ee_pos[0] - ref_zmp).norm() + (ee_pos[1] - ref_zmp).norm());
           if (alpha>1.0) alpha = 1.0;
           if (alpha<0.0) alpha = 0.0;
           if (DEBUGP) {
@@ -704,24 +704,20 @@ void AutoBalancer::getTargetParameters()
           m_force[1].data[1] = (1-alpha) * M * cog_acc(1);
           m_force[0].data[2] = alpha * M * (cog_acc(2) + G);
           m_force[1].data[2] = (1-alpha) * M * (cog_acc(2) + G);
-          // // for skate//
-          // double u_f = 0.1;
-          // double u_rolling = 0.0; // 0.1;
-          // m_force[1].data[0] = - M * gg->get_skate_acc()(0);
           if(gg->get_skate_acc()(0) != 0){
               m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
           }else{
               m_force[1].data[0] = - M * gg->get_skate_acc()(0);
           }
-          if ( m_force[1].data[2] < std::sqrt( m_force[1].data[1] * m_force[1].data[1] + m_force[1].data[0] * m_force[1].data[0] ) / mu){
-              m_force[1].data[2] = std::sqrt( m_force[1].data[1] * m_force[1].data[1] + m_force[1].data[0] * m_force[1].data[0] ) / mu;
+          if ( m_force[1].data[2] < std::sqrt( std::pow(m_force[1].data[1],2) + std::pow(m_force[1].data[0],2)) / mu ){
+              m_force[1].data[2] = std::sqrt( std::pow(m_force[1].data[1],2) + std::pow(m_force[1].data[0],2)) / mu;
               m_force[0].data[2] = M * G - m_force[1].data[2];
               m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
           }
-          m_force[0].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * alpha;
-          m_force[1].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * (1 - alpha);
-          m_force[0].data[4] = ((ee_pos[0](0) - ref_zmp(0)) * m_force[0].data[2] + (ee_pos[1](0) - ref_zmp(0)) * m_force[1].data[2]) * alpha;
-          m_force[1].data[4] = ((ee_pos[0](0) - ref_zmp(0)) * m_force[0].data[2] + (ee_pos[1](0) - ref_zmp(0)) * m_force[1].data[2]) * (1 - alpha);
+          // m_force[0].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * alpha;
+          // m_force[1].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * (1 - alpha);
+          // m_force[0].data[4] = ((ee_pos[0](0) - ref_zmp(0)) * m_force[0].data[2] + (ee_pos[1](0) - ref_zmp(0)) * m_force[1].data[2]) * alpha;
+          // m_force[1].data[4] = ((ee_pos[0](0) - ref_zmp(0)) * m_force[0].data[2] + (ee_pos[1](0) - ref_zmp(0)) * m_force[1].data[2]) * (1 - alpha);
       }
       // set limbCOPOffset
       {
