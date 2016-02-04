@@ -600,19 +600,7 @@ namespace rats
     hrp::Vector3 rzmp;
     std::vector<hrp::Vector3> sfzos;
     bool refzmp_exist_p;
-    // for skate
-    double ratio = 1.0;
-    if ( lcg.get_default_orbit_type() == CYCLOIDDELAYKICK ){
-        if (footstep_nodes_list.size() == 4){
-            if (lcg.get_footstep_index() == 1) ratio = 0.5;
-        }
-        if (footstep_nodes_list.size() > 4){
-            if ( lcg.get_footstep_index() != 0 || lcg.get_footstep_index() != footstep_nodes_list.size()-2){
-                ratio = 0.5;
-            }
-        }
-    }
-    refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before * ratio, default_double_support_ratio_after * ratio, default_double_support_static_ratio_before * ratio, default_double_support_static_ratio_after * ratio);
+    refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after);
     if (!refzmp_exist_p) {
       finalize_count++;
       rzmp = prev_que_rzmp;
@@ -664,7 +652,19 @@ namespace rats
     if ( !solved ) {
       hrp::Vector3 rzmp;
       std::vector<hrp::Vector3> sfzos;
-      bool refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after);
+      // for skate
+      double ratio = 1.0;
+      if ( lcg.get_default_orbit_type() == CYCLOIDDELAYKICK ){
+          if (footstep_nodes_list.size() == 4){
+              if (lcg.get_footstep_index() == 1) ratio = 0.5;
+          }
+          if (footstep_nodes_list.size() > 4){
+              if ( lcg.get_footstep_index() != 0 || lcg.get_footstep_index() != footstep_nodes_list.size()-2){
+                  ratio = 0.5;
+              }
+          }
+      }
+      bool refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, ratio*default_double_support_ratio_before, ratio*default_double_support_ratio_after, ratio*default_double_support_static_ratio_before, ratio*default_double_support_static_ratio_after);
       if (!refzmp_exist_p) {
         finalize_count++;
         rzmp = prev_que_rzmp;
