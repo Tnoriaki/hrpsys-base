@@ -397,8 +397,8 @@ namespace rats
         landing_vel = hrp::Vector3::Zero();
         /* landing_vel = hrp::Vector3(-0.1,0,0); */
         /// set paramter
-        hrp::Vector3 take_off_dist = take_off_vel * double_support_count_before * dt / 2.0;
-        hrp::Vector3 landing_dist = - landing_vel * double_support_count_after * dt / 2.0;
+        hrp::Vector3 take_off_dist = take_off_vel * double_support_count_before * dt / 2.499999;
+        hrp::Vector3 landing_dist = - landing_vel * double_support_count_after * dt / 2.499999;
         hrp::Vector3 start_acc = hrp::Vector3::Zero();
         hrp::Vector3 start_vel = hrp::Vector3::Zero();
         hrp::Vector3 goal_acc = hrp::Vector3::Zero();
