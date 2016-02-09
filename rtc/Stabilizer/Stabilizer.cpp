@@ -249,12 +249,15 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
       }
       target_ee_p.push_back(hrp::Vector3::Zero());
       target_ee_R.push_back(hrp::Matrix33::Identity());
+      act_ee_p.push_back(hrp::Vector3::Zero());
       act_ee_R.push_back(hrp::Matrix33::Identity());
       target_ee_diff_p.push_back(hrp::Vector3::Zero());
       target_ee_diff_r.push_back(hrp::Vector3::Zero());
       prev_target_ee_diff_r.push_back(hrp::Vector3::Zero());
       d_rpy_swing.push_back(hrp::Vector3::Zero());
       d_pos_swing.push_back(hrp::Vector3::Zero());
+      projected_normal.push_back(hrp::Vector3::Zero());
+      act_force.push_back(hrp::Vector3::Zero());
       target_ee_diff_p_filter.push_back(boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> >(new FirstOrderLowPassFilter<hrp::Vector3>(50.0, dt, hrp::Vector3::Zero()))); // [Hz]
       contact_states_index_map.insert(std::pair<std::string, size_t>(ee_name, i));
       is_ik_enable.push_back( (ee_name.find("leg") != std::string::npos ? true : false) ); // Hands ik => disabled, feet ik => enabled, by default
@@ -302,10 +305,12 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
       ikp.eefm_rot_time_const = hrp::Vector3(1.5, 1.5, 1.5);
       ikp.eefm_rot_compensation_limit = deg2rad(10.0);
       ikp.eefm_swing_rot_spring_gain = hrp::Vector3(0.0, 0.0, 0.0);
+      ikp.eefm_swing_rot_time_const = hrp::Vector3(1.5, 1.5, 1.5);
       ikp.eefm_pos_damping_gain = hrp::Vector3(3500*10, 3500*10, 3500);
       ikp.eefm_pos_time_const_support = hrp::Vector3(1.5, 1.5, 1.5);
       ikp.eefm_pos_compensation_limit = 0.025;
       ikp.eefm_swing_pos_spring_gain = hrp::Vector3(0.0, 0.0, 0.0);
+      ikp.eefm_swing_pos_time_const = hrp::Vector3(1.5, 1.5, 1.5);
       ikp.eefm_ee_moment_limit = hrp::Vector3(1e4, 1e4, 1e4); // Default limit [Nm] is too large. Same as no limit.
   }
   eefm_pos_time_const_swing = 0.08;
@@ -321,6 +326,7 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
   eefm_ee_rot_error_p_gain = 0;
   cop_check_margin = 20.0*1e-3; // [m]
   cp_check_margin.resize(4, 30*1e-3); // [m]
+  tilt_margin.resize(2, 30 * M_PI / 180); // [rad]
   contact_decision_threshold = 50; // [N]
   eefm_use_force_difference_control = true;
   initial_cp_too_large_error = true;
@@ -743,9 +749,10 @@ void Stabilizer::getActualParameters ()
     for (size_t i = 0; i < stikp.size(); i++) {
       hrp::Link* target = m_robot->link(stikp[i].target_name);
       //hrp::Vector3 act_ee_p = target->p + target->R * stikp[i].localCOPPos;
-      hrp::Vector3 act_ee_p = target->p + target->R * stikp[i].localp;
+      hrp::Vector3 _act_ee_p = target->p + target->R * stikp[i].localp;
       //target_ee_R[i] = target->R * stikp[i].localR;
-      target_ee_diff_p[i] -= foot_origin_rot.transpose() * (act_ee_p - foot_origin_pos);
+      target_ee_diff_p[i] -= foot_origin_rot.transpose() * (_act_ee_p - foot_origin_pos);
+      act_ee_p[i] = foot_origin_rot.transpose() * (_act_ee_p - foot_origin_pos);
       act_ee_R[i] = foot_origin_rot.transpose() * (target->R * stikp[i].localR);
     }
     // capture point
@@ -894,6 +901,16 @@ void Stabilizer::getActualParameters ()
         }
         // Actual ee frame =>
         ikp.ee_d_foot_rpy = ee_R.transpose() * (foot_origin_rot * ikp.d_foot_rpy);
+        // tilt Check : only flat plane is supported
+        {
+            hrp::Vector3 plane_x = target_ee_R[i].col(0);
+            hrp::Vector3 plane_y = target_ee_R[i].col(1);
+            hrp::Matrix33 act_ee_R_world = target->R * stikp[i].localR;
+            hrp::Vector3 normal_vector = act_ee_R_world.col(2);
+            /* projected_normal = c1 * plane_x + c2 * plane_y : c1 = plane_x.dot(normal_vector), c2 = plane_y.dot(normal_vector) because (normal-vector - projected_normal) is orthogonal to plane */
+            projected_normal.at(i) = plane_x.dot(normal_vector) * plane_x + plane_y.dot(normal_vector) * plane_y;
+            act_force.at(i) = sensor_force;
+        }
       }
 
       if (eefm_use_force_difference_control) {
@@ -1164,6 +1181,39 @@ void Stabilizer::calcStateForEmergencySignal()
       initial_cp_too_large_error = true;
     }
   }
+  // tilt Check
+  hrp::Vector3 fall_direction = hrp::Vector3::Zero();
+  bool is_falling = false, will_fall = false;
+  {
+      double total_force = 0.0;
+      for (size_t i = 0; i < stikp.size(); i++) {
+          if (is_zmp_calc_enable[i]) {
+              if (is_walking) {
+                  if (projected_normal.at(i).norm() > sin(tilt_margin[0])) {
+                      will_fall = true;
+                      std::cerr << "swgsuptime : " << m_controlSwingSupportTime.data[i] << ", state : " << contact_states[i] << std::endl;
+                      if (loop % static_cast <int>(1.0/dt) == 0 ) { // once per 1.0[s]
+                          std::cerr << "[" << m_profile.instance_name << "] " << stikp[i].ee_name << " cannot support total weight, "
+                                    << "otherwise robot will fall down toward " << "(" << projected_normal.at(i)(0) << "," << projected_normal.at(i)(1) << ") direction" << std::endl;
+                      }
+                  }
+              }
+              fall_direction += projected_normal.at(i) * act_force.at(i).norm();
+              total_force += act_force.at(i).norm();
+          }
+      }
+      if (on_ground && transition_count == 0 && control_mode == MODE_ST) {
+          fall_direction = fall_direction / total_force;
+      } else {
+          fall_direction = hrp::Vector3::Zero();
+      }
+      if (fall_direction.norm() > sin(tilt_margin[1])) {
+          is_falling = true;
+          if (loop % static_cast <int>(0.2/dt) == 0 ) { // once per 0.2[s]
+              std::cerr << "[" << m_profile.instance_name << "] robot is falling down toward " << "(" << fall_direction(0) << "," << fall_direction(1) << ") direction" << std::endl;
+          }
+      }
+  }
   // Total check for emergency signal
   switch (emergency_check_mode) {
   case OpenHRP::StabilizerService::NO_CHECK:
@@ -1174,6 +1224,9 @@ void Stabilizer::calcStateForEmergencySignal()
       break;
   case OpenHRP::StabilizerService::CP:
       is_emergency = is_cp_outside;
+      break;
+  case OpenHRP::StabilizerService::TILT:
+      is_emergency = will_fall | is_falling;
       break;
   default:
       break;
@@ -1336,57 +1389,60 @@ void Stabilizer::calcEEForceMomentControl() {
       // follow swing foot rotation to target one in single support phase on the assumption that the robot rotates around support foot.
       {
           hrp::Matrix33 cur_sup_R, act_sup_R;
-          hrp::Vector3 cur_sup_p;
+          hrp::Vector3 cur_sup_p, act_sup_p;
           for (size_t i = 0; i < stikp.size(); i++) {
-              if (isContact(i)) {
-                  cur_sup_R = tmpR_list.at(i);
-                  cur_sup_p = tmpp_list.at(i);
+              if (contact_states[contact_states_index_map[stikp[i].ee_name]]) {
+                  cur_sup_R = foot_origin_rot.transpose() * tmpR_list.at(i);
+                  cur_sup_p = foot_origin_rot.transpose() * (tmpp_list.at(i) - foot_origin_pos);
                   act_sup_R = act_ee_R.at(i);
+                  act_sup_p = act_ee_p.at(i);
                   break;
               }
           }
           for (size_t i = 0; i < stikp.size(); i++) {
-              if (isContact(i) or contact_states[contact_states_index_map[stikp[i].ee_name]]) {
-                  /* method A */
-                  // for (size_t j = 0; j < 3; j++) {
-                  //     d_rpy_swing.at(i)[j] = (-1 / 0.5 * d_rpy_swing.at(i)[j]) * dt + d_rpy_swing.at(i)[j];
-                  //     d_pos_swing.at(i)[j] = (-1 / 0.5 * d_pos_swing.at(i)[j]) * dt + d_pos_swing.at(i)[j];
-                  // }
-                  /* method B */
-                  d_rpy_swing.at(i) = hrp::Vector3::Zero();
-                  d_pos_swing.at(i) = hrp::Vector3::Zero();
+              if (contact_states[contact_states_index_map[stikp[i].ee_name]]) {
+                  for (size_t j = 0; j < 3; j++) {
+                      d_rpy_swing.at(i)[j] = (-1 / stikp[i].eefm_swing_rot_time_const[j] * d_rpy_swing.at(i)[j]) * dt + d_rpy_swing.at(i)[j];
+                      d_pos_swing.at(i)[j] = (-1 / stikp[i].eefm_swing_pos_time_const[j] * d_pos_swing.at(i)[j]) * dt + d_pos_swing.at(i)[j];
+                  }
               } else {
                   /* rotation */
                   {
-                      hrp::Matrix33 cur_swg_R = tmpR_list.at(i);
-                      hrp::Matrix33 swg_R_relative_to_sup_R = cur_sup_R.transpose() * cur_swg_R;
-                      hrp::Matrix33 new_swg_R;
-                      rats::rotm3times(new_swg_R, act_sup_R, swg_R_relative_to_sup_R);
-                      rats::rotm3times(new_swg_R, foot_origin_rot, new_swg_R);
-                      hrp::Vector3 tmp_diff_rpy = hrp::rpyFromRot(new_swg_R.transpose() * tmpR_list.at(i));
+                      hrp::Matrix33 cur_swg_R = foot_origin_rot.transpose() * tmpR_list.at(i);
+                      hrp::Matrix33 new_swg_R = cur_sup_R * (act_sup_R.transpose() * cur_swg_R);
+                      hrp::Vector3 tmp_diff_rpy = hrp::rpyFromRot(cur_swg_R.transpose() * new_swg_R);
                       for (size_t j = 0; j < 3; j++) {
-                          /* method A */
-                          // d_rpy_swing.at(i)[j] = (stikp[i].eefm_swing_rot_spring_gain[j] * tmp_diff_rpy[j] - 1 / 1.5 * d_rpy_swing.at(i)[j]) * dt + d_rpy_swing.at(i)[j];
-                          /* method B */
-                          d_rpy_swing.at(i)[j] = tmp_diff_rpy[j] * stikp[i].eefm_swing_rot_spring_gain[j];
+                          d_rpy_swing.at(i)[j] = (stikp[i].eefm_swing_rot_spring_gain[j] * tmp_diff_rpy[j] - 1 / stikp[i].eefm_swing_rot_time_const[j] * d_rpy_swing.at(i)[j]) * dt + d_rpy_swing.at(i)[j];
                       }
-                      rats::rotm3times(tmpR_list.at(i), tmpR_list.at(i), hrp::rotFromRpy(d_rpy_swing.at(i)));
+                      /* 
+                       * if (is_feedback_control_enable[i] && loop % static_cast <int>(0.2/dt) == 0 ) { // once per 0.2[s]
+                       *     std::cerr << "[" << m_profile.instance_name << "] [" << stikp[i].ee_name << "]  actual support : " << (hrp::rpyFromRot(act_sup_R) / M_PI * 180.0).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[deg]" << std::endl;
+                       *     std::cerr << "[" << m_profile.instance_name << "] [" << stikp[i].ee_name << "] current support : " << (hrp::rpyFromRot(cur_sup_R) / M_PI * 180.0).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[deg]" << std::endl;
+                       *     std::cerr << "[" << m_profile.instance_name << "] [" << stikp[i].ee_name << "] current   swing : " << (hrp::rpyFromRot(cur_swg_R) / M_PI * 180.0).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[deg]" << std::endl;
+                       *     std::cerr << "[" << m_profile.instance_name << "] [" << stikp[i].ee_name << "] current  *swing : " << (hrp::rpyFromRot(new_swg_R) / M_PI * 180.0).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[deg]" << std::endl;
+                       * }
+                       */
                   }
                   /* position */
                   {
-                      hrp::Vector3 cur_swg_p = tmpp_list.at(i);
-                      hrp::Vector3 swg_p_relative_to_sup_R = cur_sup_R.transpose() * (cur_swg_p - cur_sup_p);
-                      hrp::Vector3 new_swg_p = (foot_origin_rot * act_sup_R) * swg_p_relative_to_sup_R + cur_sup_p;
-                      hrp::Vector3 tmp_diff_pos = tmpp_list.at(i) - new_swg_p;
+                      hrp::Vector3 cur_swg_p = foot_origin_rot.transpose() * (tmpp_list.at(i) - foot_origin_pos);
+                      hrp::Vector3 new_swg_p = cur_sup_p + cur_sup_R * (act_sup_R.transpose() * (cur_swg_p - act_sup_p));
+                      hrp::Vector3 tmp_diff_pos = new_swg_p - cur_swg_p;
                       for (size_t j = 0; j < 3; j++) {
-                          /* method A */
-                          // d_pos_swing.at(i)[j] = (stikp[i].eefm_swing_pos_spring_gain[j] * tmp_diff_pos[j] - 1 / 1.5 * d_pos_swing.at(i)[j]) * dt + d_pos_swing.at(i)[j];
-                          /* method B */
-                          d_pos_swing.at(i)[j] = tmp_diff_pos[j] * stikp[i].eefm_swing_pos_spring_gain[j];
+                          d_pos_swing.at(i)[j] = (stikp[i].eefm_swing_pos_spring_gain[j] * tmp_diff_pos[j] - 1 / stikp[i].eefm_swing_pos_time_const[j] * d_pos_swing.at(i)[j]) * dt + d_pos_swing.at(i)[j];
                       }
-                      tmpp_list.at(i) = tmpp_list.at(i) + d_pos_swing.at(i);
+                      /* 
+                       * if (is_feedback_control_enable[i] && loop % static_cast <int>(0.2/dt) == 0 ) { // once per 0.2[s]
+                       *     std::cerr << "[" << m_profile.instance_name << "] [" << stikp[i].ee_name << "]  actual support : " << (act_sup_p * 1e3).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[mm]" << std::endl;
+                       *     std::cerr << "[" << m_profile.instance_name << "] [" << stikp[i].ee_name << "] current support : " << (cur_sup_p * 1e3).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[mm]" << std::endl;
+                       *     std::cerr << "[" << m_profile.instance_name << "] [" << stikp[i].ee_name << "] current   swing : " << (cur_swg_p * 1e3).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[mm]" << std::endl;
+                       *     std::cerr << "[" << m_profile.instance_name << "] [" << stikp[i].ee_name << "] current  *swing : " << (new_swg_p * 1e3).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[mm]" << std::endl;
+                       * }
+                       */
                   }
               }
+              rats::rotm3times(tmpR_list.at(i), tmpR_list.at(i), hrp::rotFromRpy(d_rpy_swing.at(i)));
+              tmpp_list.at(i) = tmpp_list.at(i) + foot_origin_rot * d_pos_swing.at(i);
           }
           if (DEBUGP) {
               for (size_t i = 0; i < stikp.size(); i++) {
@@ -1551,26 +1607,32 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
   i_stp.eefm_pos_damping_gain.length(stikp.size());
   i_stp.eefm_pos_compensation_limit.length(stikp.size());
   i_stp.eefm_swing_pos_spring_gain.length(stikp.size());
+  i_stp.eefm_swing_pos_time_const.length(stikp.size());
   i_stp.eefm_rot_time_const.length(stikp.size());
   i_stp.eefm_rot_damping_gain.length(stikp.size());
   i_stp.eefm_rot_compensation_limit.length(stikp.size());
   i_stp.eefm_swing_rot_spring_gain.length(stikp.size());
+  i_stp.eefm_swing_rot_time_const.length(stikp.size());
   i_stp.eefm_ee_moment_limit.length(stikp.size());
   for (size_t j = 0; j < stikp.size(); j++) {
       i_stp.eefm_pos_damping_gain[j].length(3);
       i_stp.eefm_pos_time_const_support[j].length(3);
       i_stp.eefm_swing_pos_spring_gain[j].length(3);
+      i_stp.eefm_swing_pos_time_const[j].length(3);
       i_stp.eefm_rot_damping_gain[j].length(3);
       i_stp.eefm_rot_time_const[j].length(3);
       i_stp.eefm_swing_rot_spring_gain[j].length(3);
+      i_stp.eefm_swing_rot_time_const[j].length(3);
       i_stp.eefm_ee_moment_limit[j].length(3);
       for (size_t i = 0; i < 3; i++) {
           i_stp.eefm_pos_damping_gain[j][i] = stikp[j].eefm_pos_damping_gain(i);
           i_stp.eefm_pos_time_const_support[j][i] = stikp[j].eefm_pos_time_const_support(i);
           i_stp.eefm_swing_pos_spring_gain[j][i] = stikp[j].eefm_swing_pos_spring_gain(i);
+          i_stp.eefm_swing_pos_time_const[j][i] = stikp[j].eefm_swing_pos_time_const(i);
           i_stp.eefm_rot_damping_gain[j][i] = stikp[j].eefm_rot_damping_gain(i);
           i_stp.eefm_rot_time_const[j][i] = stikp[j].eefm_rot_time_const(i);
           i_stp.eefm_swing_rot_spring_gain[j][i] = stikp[j].eefm_swing_rot_spring_gain(i);
+          i_stp.eefm_swing_rot_time_const[j][i] = stikp[j].eefm_swing_rot_time_const(i);
           i_stp.eefm_ee_moment_limit[j][i] = stikp[j].eefm_ee_moment_limit(i);
       }
       i_stp.eefm_pos_compensation_limit[j] = stikp[j].eefm_pos_compensation_limit;
@@ -1629,6 +1691,9 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
   i_stp.cop_check_margin = cop_check_margin;
   for (size_t i = 0; i < cp_check_margin.size(); i++) {
     i_stp.cp_check_margin[i] = cp_check_margin[i];
+  }
+  for (size_t i = 0; i < tilt_margin.size(); i++) {
+    i_stp.tilt_margin[i] = tilt_margin[i];
   }
   i_stp.contact_decision_threshold = contact_decision_threshold;
   i_stp.is_estop_while_walking = is_estop_while_walking;
@@ -1723,10 +1788,12 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
        i_stp.eefm_pos_time_const_support.length () == stikp.size() &&
        i_stp.eefm_pos_compensation_limit.length () == stikp.size() &&
        i_stp.eefm_swing_pos_spring_gain.length () == stikp.size() &&
+       i_stp.eefm_swing_pos_time_const.length () == stikp.size() &&
        i_stp.eefm_rot_damping_gain.length () == stikp.size() &&
        i_stp.eefm_rot_time_const.length () == stikp.size() &&
        i_stp.eefm_rot_compensation_limit.length () == stikp.size() &&
        i_stp.eefm_swing_rot_spring_gain.length () == stikp.size() &&
+       i_stp.eefm_swing_rot_time_const.length () == stikp.size() &&
        i_stp.eefm_ee_moment_limit.length () == stikp.size() ) {
       is_damping_parameter_ok = true;
       for (size_t j = 0; j < stikp.size(); j++) {
@@ -1734,9 +1801,11 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
               stikp[j].eefm_pos_damping_gain(i) = i_stp.eefm_pos_damping_gain[j][i];
               stikp[j].eefm_pos_time_const_support(i) = i_stp.eefm_pos_time_const_support[j][i];
               stikp[j].eefm_swing_pos_spring_gain(i) = i_stp.eefm_swing_pos_spring_gain[j][i];
+              stikp[j].eefm_swing_pos_time_const(i) = i_stp.eefm_swing_pos_time_const[j][i];
               stikp[j].eefm_rot_damping_gain(i) = i_stp.eefm_rot_damping_gain[j][i];
               stikp[j].eefm_rot_time_const(i) = i_stp.eefm_rot_time_const[j][i];
               stikp[j].eefm_swing_rot_spring_gain(i) = i_stp.eefm_swing_rot_spring_gain[j][i];
+              stikp[j].eefm_swing_rot_time_const(i) = i_stp.eefm_swing_rot_time_const[j][i];
               stikp[j].eefm_ee_moment_limit(i) = i_stp.eefm_ee_moment_limit[j][i];
           }
           stikp[j].eefm_pos_compensation_limit = i_stp.eefm_pos_compensation_limit[j];
@@ -1790,6 +1859,9 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
   cop_check_margin = i_stp.cop_check_margin;
   for (size_t i = 0; i < cp_check_margin.size(); i++) {
     cp_check_margin[i] = i_stp.cp_check_margin[i];
+  }
+  for (size_t i = 0; i < tilt_margin.size(); i++) {
+    tilt_margin[i] = i_stp.tilt_margin[i];
   }
   contact_decision_threshold = i_stp.contact_decision_threshold;
   is_estop_while_walking = i_stp.is_estop_while_walking;
@@ -1847,7 +1919,10 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
                     << "eefm_rot_compensation_limit = " << stikp[j].eefm_rot_compensation_limit << "[rad]" << std::endl;
           std::cerr << "[" << m_profile.instance_name << "]   [" << stikp[j].ee_name << "] "
                     << "eefm_swing_pos_spring_gain = " << stikp[j].eefm_swing_pos_spring_gain.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << ", "
-                    << "eefm_swing_rot_spring_gain = " << stikp[j].eefm_swing_rot_spring_gain.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << std::endl;
+                    << "eefm_swing_pos_time_const = " << stikp[j].eefm_swing_pos_time_const.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << ", "
+                    << "eefm_swing_rot_spring_gain = " << stikp[j].eefm_swing_rot_spring_gain.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << ", "
+                    << "eefm_swing_pos_time_const = " << stikp[j].eefm_swing_pos_time_const.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << ", "
+                    << std::endl;
           std::cerr << "[" << m_profile.instance_name << "]   [" << stikp[j].ee_name << "] "
                     << "eefm_ee_moment_limit = " << stikp[j].eefm_ee_moment_limit.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[Nm]" << std::endl;
       }
@@ -1870,6 +1945,7 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
   std::cerr << "[" << m_profile.instance_name << "]  transition_time = " << transition_time << "[s]" << std::endl;
   std::cerr << "[" << m_profile.instance_name << "]  cop_check_margin = " << cop_check_margin << "[m]" << std::endl;
   std::cerr << "[" << m_profile.instance_name << "]  cp_check_margin = [" << cp_check_margin[0] << ", " << cp_check_margin[1] << ", " << cp_check_margin[2] << ", " << cp_check_margin[3] << "] [m]" << std::endl;
+  std::cerr << "[" << m_profile.instance_name << "]  tilt_margin = [" << tilt_margin[0] << ", " << tilt_margin[1] << "] [rad]" << std::endl;
   std::cerr << "[" << m_profile.instance_name << "]  contact_decision_threshold = " << contact_decision_threshold << "[N]" << std::endl;
   // IK limb parameters
   std::cerr << "[" << m_profile.instance_name << "]  IK limb parameters" << std::endl;
