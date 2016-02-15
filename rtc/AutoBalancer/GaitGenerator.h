@@ -1213,7 +1213,9 @@ namespace rats
       //for skate
       /* hrp::Vector3 modif_refzmp = refzmp; */
       /* modif_refzmp(0) += lcg.get_skate_acc()(0) * cog(2) / gravitational_acceleration; */
-      refzmp(0) += lcg.get_skate_acc()(0) * cog(2) / gravitational_acceleration;
+        if(lcg.get_default_orbit_type() == CYCLOIDDELAYKICK){
+            refzmp(0) += lcg.get_skate_acc()(0) * cog(2) / gravitational_acceleration;
+        }
       return refzmp;
     };
     hrp::Vector3 get_cart_zmp () const
