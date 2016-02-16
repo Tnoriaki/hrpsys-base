@@ -705,15 +705,35 @@ void AutoBalancer::getTargetParameters()
           m_force[1].data[1] = (1-alpha) * M * cog_acc(1);
           m_force[0].data[2] = alpha * M * (cog_acc(2) + G);
           m_force[1].data[2] = (1-alpha) * M * (cog_acc(2) + G);
+          //Modify Fx for rolling friction
           if(gg->get_skate_acc()(0) != 0){
-              m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
+              m_force[0].data[1] = - m_force[0].data[2] * mu_rolling;
+              m_force[1].data[0] = M * cog_acc(0) - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
           }else{
+              m_force[0].data[1] = 0;
               m_force[1].data[0] = - M * gg->get_skate_acc()(0);
           }
-          if ( m_force[1].data[2] < std::sqrt( std::pow(m_force[1].data[1],2) + std::pow(m_force[1].data[0],2)) / mu ){
-              m_force[1].data[2] = std::sqrt( std::pow(m_force[1].data[1],2) + std::pow(m_force[1].data[0],2)) / mu;
-              m_force[0].data[2] = M * G - m_force[1].data[2];
+          //Modify Fz for Static Friction
+          //Tmp
+          double A = mu_rolling * G;
+          double B = cog_acc(0) - gg->get_skate_acc()(0);
+          double E = (mu * G)*(mu * G) - cog_acc(1)*cog_acc(1);
+          double alpha_lim = ((E+A*B) - (A+B)*std::sqrt(E))/(E-A*A);
+          std::cerr<<alpha_lim<<std::endl;
+          //For Support Leg
+          if ( m_force[0].data[2] < std::sqrt( std::pow(m_force[0].data[1],2) + std::pow(m_force[0].data[0],2)) / mu ){
+              m_force[0].data[2] = std::sqrt( std::pow(m_force[0].data[1],2) + std::pow(m_force[0].data[0],2)) / mu;
+              m_force[1].data[2] = M * G - m_force[0].data[2];
               m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
+          }
+          //For Kick Leg
+          if ( m_force[1].data[2] < std::sqrt( std::pow(m_force[1].data[1],2) + std::pow(m_force[1].data[0],2)) / mu ){
+              m_force[0].data[2] = M * G * alpha_lim;
+              m_force[1].data[2] = M * G * (1-alpha_lim);
+              m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
+              // m_force[1].data[2] = std::sqrt( std::pow(m_force[1].data[1],2) + std::pow(m_force[1].data[0],2)) / mu;
+              // m_force[0].data[2] = M * G - m_force[1].data[2];
+              // m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
           }
           // m_force[0].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * alpha;
           // m_force[1].data[3] = (- (ee_pos[0](1) - ref_zmp(1)) * m_force[0].data[2] - (ee_pos[1](1) - ref_zmp(1)) * m_force[1].data[2]) * (1 - alpha);

@@ -217,7 +217,7 @@ namespace rats
       bool use_toe_heel_transition;
       boost::shared_ptr<interpolator> zmp_weight_interpolator;
       std::vector<size_t> same_footstep_index_list;
-      void calc_current_refzmp (hrp::Vector3& ret, std::vector<hrp::Vector3>& swing_foot_zmp_offsets, const double default_double_support_ratio_before, const double default_double_support_ratio_after, const double default_double_support_static_ratio_before, const double default_double_support_static_ratio_after);
+      void calc_current_refzmp (hrp::Vector3& ret, std::vector<hrp::Vector3>& swing_foot_zmp_offsets, const double default_double_support_ratio_before, const double default_double_support_ratio_after, const double default_double_support_static_ratio_before, const double default_double_support_static_ratio_after, const hrp::Vector3 take_off_vel);
       const bool is_start_double_support_phase () const { return refzmp_index == 0; };
       const bool is_second_phase () const { return refzmp_index == 1; };
       const bool is_second_last_phase () const { return refzmp_index == refzmp_cur_list.size()-2; };
@@ -290,9 +290,9 @@ namespace rats
           }
       };
       // getter
-      bool get_current_refzmp (hrp::Vector3& rzmp, std::vector<hrp::Vector3>& swing_foot_zmp_offsets, const double default_double_support_ratio_before, const double default_double_support_ratio_after, const double default_double_support_static_ratio_before, const double default_double_support_static_ratio_after)
+      bool get_current_refzmp (hrp::Vector3& rzmp, std::vector<hrp::Vector3>& swing_foot_zmp_offsets, const double default_double_support_ratio_before, const double default_double_support_ratio_after, const double default_double_support_static_ratio_before, const double default_double_support_static_ratio_after, const hrp::Vector3 take_off_vel)
       {
-        if (refzmp_cur_list.size() > refzmp_index ) calc_current_refzmp(rzmp, swing_foot_zmp_offsets, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after);
+        if (refzmp_cur_list.size() > refzmp_index ) calc_current_refzmp(rzmp, swing_foot_zmp_offsets, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after, take_off_vel);
         return refzmp_cur_list.size() > refzmp_index;
       };
       const hrp::Vector3& get_refzmp_cur () const { return refzmp_cur_list.front(); };
@@ -397,8 +397,8 @@ namespace rats
         landing_vel = hrp::Vector3::Zero();
         /* landing_vel = hrp::Vector3(-0.1,0,0); */
         /// set paramter
-        hrp::Vector3 take_off_dist = take_off_vel * double_support_count_before * dt / 2.499999;
-        hrp::Vector3 landing_dist = - landing_vel * double_support_count_after * dt / 2.499999;
+        hrp::Vector3 take_off_dist = take_off_vel * double_support_count_before * dt / 2.4999999;
+        hrp::Vector3 landing_dist = - landing_vel * double_support_count_after * dt / 2.4999999;
         hrp::Vector3 start_acc = hrp::Vector3::Zero();
         hrp::Vector3 start_vel = hrp::Vector3::Zero();
         hrp::Vector3 goal_acc = hrp::Vector3::Zero();

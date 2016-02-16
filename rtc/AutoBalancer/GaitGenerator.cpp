@@ -109,7 +109,7 @@ namespace rats
     //std::cerr << "single " << fns[fs_index-1].l_r << " [" << refzmp_cur_list.back()(0) << " " << refzmp_cur_list.back()(1) << " " << refzmp_cur_list.back()(2) << "]" << std::endl;
   };
 
-  void refzmp_generator::calc_current_refzmp (hrp::Vector3& ret, std::vector<hrp::Vector3>& swing_foot_zmp_offsets, const double default_double_support_ratio_before, const double default_double_support_ratio_after, const double default_double_support_static_ratio_before, const double default_double_support_static_ratio_after)
+  void refzmp_generator::calc_current_refzmp (hrp::Vector3& ret, std::vector<hrp::Vector3>& swing_foot_zmp_offsets, const double default_double_support_ratio_before, const double default_double_support_ratio_after, const double default_double_support_static_ratio_before, const double default_double_support_static_ratio_after ,const hrp::Vector3 take_off_vel)
   {
     size_t cnt = one_step_count - refzmp_count; // current counter (0 -> one_step_count)
     size_t double_support_count_half_before = default_double_support_ratio_before * one_step_count;
@@ -157,6 +157,14 @@ namespace rats
             if ( same_footstep_index_list[it] == refzmp_index ) is_same_footstep_phase = true;
         }
     }
+    // For Skate
+    double T_acc = dt * double_support_count_half_before; // acc time
+    double ratio_acc = cnt / (double_support_count_half_before*1.0); // current time ratio
+    double V = -take_off_vel(0); // ref velocity
+    double zc = 0.7; // const cog hegiht
+    double G = 9.8; // G
+    // double zmp_comp = 6.0*V/T_acc*zc/G*(ratio_acc-ratio_acc*ratio_acc)-V*T_acc/2.0*(1-ratio_acc)*(pow(ratio_acc,3)-pow(ratio_acc,4)/2.0);
+    double zmp_comp = 12.0*V/T_acc*zc/G*ratio_acc*ratio_acc*(1-ratio_acc)-V*T_acc/2.0*(1-ratio_acc)*(pow(ratio_acc,4)-0.4*(pow(ratio_acc,5)));
     // Calculate total reference ZMP
     if (is_start_double_support_phase() || is_end_double_support_phase()) {
         ret = refzmp_cur_list[refzmp_index];
@@ -168,7 +176,7 @@ namespace rats
             prev_support_zmp = refzmp_cur_list[refzmp_index] + zmp_diff * foot_x_axises_list[refzmp_index].front();
         }
         double ratio = (is_second_phase()?1.0:0.5);
-        ret = (1 - ratio) * current_support_zmp + ratio * prev_support_zmp;
+        ret = (1 - ratio) * current_support_zmp + ratio * prev_support_zmp + hrp::Vector3(zmp_comp,0,0);
      } else if ( cnt > one_step_count - double_support_static_count_half_after ) { // End double support static period
         hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index+1] + zmp_diff * foot_x_axises_list[refzmp_index+1].front();
         hrp::Vector3 prev_support_zmp = refzmp_cur_list[refzmp_index];
@@ -187,7 +195,7 @@ namespace rats
             prev_support_zmp = refzmp_cur_list[refzmp_index] + zmp_diff * foot_x_axises_list[refzmp_index].front();
         }
         double ratio = ((is_second_phase()?1.0:0.5) / (double_support_count_half_before-double_support_static_count_half_before)) * (double_support_count_half_before-cnt);
-        ret = (1 - ratio) * current_support_zmp + ratio * prev_support_zmp;
+        ret = (1 - ratio) * current_support_zmp + ratio * prev_support_zmp + hrp::Vector3(zmp_comp,0,0);
      } else if ( cnt > one_step_count - double_support_count_half_after ) { // End double support period
         hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index+1] + zmp_diff * foot_x_axises_list[refzmp_index+1].front();
         hrp::Vector3 prev_support_zmp = refzmp_cur_list[refzmp_index];
@@ -602,7 +610,7 @@ namespace rats
     hrp::Vector3 rzmp;
     std::vector<hrp::Vector3> sfzos;
     bool refzmp_exist_p;
-    refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after);
+    refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after, get_swing_leg_take_off_vel ());
     if (!refzmp_exist_p) {
       finalize_count++;
       rzmp = prev_que_rzmp;
@@ -666,7 +674,7 @@ namespace rats
               }
           }
       }
-      bool refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, ratio*default_double_support_ratio_before, ratio*default_double_support_ratio_after, ratio*default_double_support_static_ratio_before, ratio*default_double_support_static_ratio_after);
+      bool refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, ratio*default_double_support_ratio_before, ratio*default_double_support_ratio_after, ratio*default_double_support_static_ratio_before, ratio*default_double_support_static_ratio_after, get_swing_leg_take_off_vel ());
       if (!refzmp_exist_p) {
         finalize_count++;
         rzmp = prev_que_rzmp;
@@ -968,7 +976,7 @@ namespace rats
     hrp::Vector3 rzmp;
     while ( !solved ) {
       std::vector<hrp::Vector3> sfzos;
-      bool refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after);
+      bool refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after, get_swing_leg_take_off_vel ());
       solved = preview_controller_ptr->update(refzmp, cog, swing_foot_zmp_offsets, rzmp, sfzos, refzmp_exist_p);
       rg.update_refzmp(footstep_nodes_list);
     }
