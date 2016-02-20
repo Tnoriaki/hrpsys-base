@@ -336,6 +336,17 @@ namespace rats
         vel = vel + dt * acc;
         pos = pos + dt * vel;
       };
+      void hoffarbib_interpolation_acc (const double t, const double T, const hrp::Vector3& goal_pos, const hrp::Vector3& goal_vel, const hrp::Vector3& goal_acc, const hrp::Vector3& start_pos, const hrp::Vector3& start_vel, const hrp::Vector3& start_acc)
+      {
+        acc = 6.0 * (t/T) * (0.5 * goal_acc  - 1.5 * start_acc - 4.0 * goal_vel / T - 6.0 * start_vel / T + 10.0 * goal_pos / (T*T) - 10.0 * start_pos / (T*T))
+          + 12.0 * (t/T) * (t/T) * (-  goal_acc  - 1.5 * start_acc + 7.0 * goal_vel / T + 8.0 * start_vel / T - 15.0 * goal_pos / (T*T) + 15.0 * start_pos / (T*T))
+          + 20.0 * (t/T) * (t/T) * (t/T) * (0.5 * goal_acc - 0.5 * start_acc - 3.0 * goal_vel / T - 3.0 * start_vel / T + 6.0 * goal_pos / (T*T) - 6.0 * start_pos / (T*T))
+          + start_acc;
+        if (t == 0) vel = start_vel;
+        vel = vel + dt * acc;
+        if (t == 0) pos = start_pos;
+        pos = pos + dt * vel;
+      }
     protected:
       double time_offset; // [s]
       double final_distance_weight;
@@ -397,36 +408,35 @@ namespace rats
         landing_vel = hrp::Vector3::Zero();
         /* landing_vel = hrp::Vector3(-0.1,0,0); */
         /// set paramter
-        hrp::Vector3 take_off_dist = take_off_vel * double_support_count_before * dt / 2.4999999;
-        hrp::Vector3 landing_dist = - landing_vel * double_support_count_after * dt / 2.4999999;
+        double dist_ratio = 0.4;
+        hrp::Vector3 take_off_dist = take_off_vel * double_support_count_before * dt * dist_ratio;
+        hrp::Vector3 landing_dist = - landing_vel * double_support_count_after * dt * dist_ratio;
         hrp::Vector3 start_acc = hrp::Vector3::Zero();
         hrp::Vector3 start_vel = hrp::Vector3::Zero();
         hrp::Vector3 goal_acc = hrp::Vector3::Zero();
         hrp::Vector3 goal_vel = hrp::Vector3::Zero();
         double double_support_count_before_for_skate = double_support_count_before;
         double double_support_count_after_for_skate = double_support_count_after;
-        if ( use_start_vel ) {
-            double_support_count_before_for_skate *= 0.5;
-            start_acc = 1.5 * (take_off_vel - landing_vel) / (double_support_count_before * dt);
-            start_vel = 0.5 * take_off_vel + 7.0 * landing_vel / 16.0;
-            take_off_dist -= ( 3.0 *  take_off_vel + 5.0 * landing_vel) * double_support_count_before * dt / 32.0;
-        }
+        if ( use_start_vel ) double_support_count_before_for_skate *= 0.5;
         if ( use_goal_vel ) {
             double_support_count_after_for_skate *= 0.5;
             goal_acc = 1.5 * (take_off_vel - landing_vel) / (double_support_count_after * dt);
-            goal_vel = 0.5 * take_off_vel + 7.0 * landing_vel / 16.0;
-            landing_dist = - ( 3.0 * take_off_vel + 5.0 * landing_vel ) * double_support_count_after * dt /32.0;
+            goal_vel = ((30*dist_ratio-7)*take_off_vel + 7.0 * landing_vel) / 16.0;
+            landing_dist -= ( (16.0*dist_ratio-5.0) * take_off_vel + 5.0 * landing_vel ) * double_support_count_after * dt /32.0;
         }
         /// update
-        if ( current_count == 0 ){
-          acc = start_acc;
-          vel = start_vel + acc * dt;
-          pos = start + vel * dt;
+        if ( current_count <= double_support_count_before_for_skate ) { // first double support phase
+          double time = current_count * dt;
+          double T_acc = double_support_count_before * dt;
+          if ( use_start_vel ) time = (current_count + double_support_count_before_for_skate) * dt;
+          /* hoffarbib_interpolation_all (remain_time, start + take_off_dist, take_off_vel, hrp::Vector3::Zero()); */
+          hoffarbib_interpolation_acc (time, T_acc, start+take_off_dist, take_off_vel, hrp::Vector3::Zero(), start, start_vel, start_acc);
           skate_acc = acc;
-        } else if ( current_count == one_step_count ){
-          acc = goal_acc;
-          vel = goal_vel;
-          pos = goal;
+        } else if ( current_count >= one_step_count - double_support_count_after_for_skate ) { // last double support phase
+          double time = (current_count - ( one_step_count - double_support_count_after_for_skate)) * dt ;
+          double T_acc = double_support_count_after_for_skate * dt;
+          /* hoffarbib_interpolation_all((one_step_count - double_support_count_after_for_skate) * dt, goal, goal_vel, goal_acc); */
+          hoffarbib_interpolation_acc (time, T_acc, goal, goal_vel, goal_acc, goal + landing_dist, landing_vel, hrp::Vector3::Zero());
           skate_acc = acc;
         } else if ( double_support_count_before_for_skate <= current_count && current_count < one_step_count - double_support_count_after_for_skate ) { // swing phase
           size_t swing_remain_count = one_step_count - current_count - double_support_count_after_for_skate;
@@ -441,12 +451,6 @@ namespace rats
             pos += vel * dt;
             skate_acc = hrp::Vector3::Zero();
           }
-        } else if ( current_count < double_support_count_before_for_skate ) { // first double support phase
-          hoffarbib_interpolation_all ((double_support_count_before_for_skate  - current_count) * dt, start + take_off_dist, take_off_vel, hrp::Vector3::Zero());
-          skate_acc = acc;
-        } else { // last double support phase
-          hoffarbib_interpolation_all((one_step_count - current_count + 1) * dt, goal, goal_vel, goal_acc);
-          skate_acc = acc;
         }
         ret = pos;
         current_count++;
