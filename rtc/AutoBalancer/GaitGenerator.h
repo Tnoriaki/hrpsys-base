@@ -338,14 +338,16 @@ namespace rats
       };
       void hoffarbib_interpolation_acc (const double t, const double T, const hrp::Vector3& goal_pos, const hrp::Vector3& goal_vel, const hrp::Vector3& goal_acc, const hrp::Vector3& start_pos, const hrp::Vector3& start_vel, const hrp::Vector3& start_acc)
       {
-        acc = 6.0 * (t/T) * (0.5 * goal_acc  - 1.5 * start_acc - 4.0 * goal_vel / T - 6.0 * start_vel / T + 10.0 * goal_pos / (T*T) - 10.0 * start_pos / (T*T))
-          + 12.0 * (t/T) * (t/T) * (-  goal_acc  - 1.5 * start_acc + 7.0 * goal_vel / T + 8.0 * start_vel / T - 15.0 * goal_pos / (T*T) + 15.0 * start_pos / (T*T))
-          + 20.0 * (t/T) * (t/T) * (t/T) * (0.5 * goal_acc - 0.5 * start_acc - 3.0 * goal_vel / T - 3.0 * start_vel / T + 6.0 * goal_pos / (T*T) - 6.0 * start_pos / (T*T))
-          + start_acc;
-        if (t == 0) vel = start_vel;
-        vel = vel + dt * acc;
-        if (t == 0) pos = start_pos;
-        pos = pos + dt * vel;
+        if (T > 0){
+          acc = 6.0 * (t/T) * (0.5 * goal_acc  - 1.5 * start_acc - 4.0 * goal_vel / T - 6.0 * start_vel / T + 10.0 * goal_pos / (T*T) - 10.0 * start_pos / (T*T))
+            + 12.0 * (t/T) * (t/T) * (-  goal_acc  - 1.5 * start_acc + 7.0 * goal_vel / T + 8.0 * start_vel / T - 15.0 * goal_pos / (T*T) + 15.0 * start_pos / (T*T))
+            + 20.0 * (t/T) * (t/T) * (t/T) * (0.5 * goal_acc - 0.5 * start_acc - 3.0 * goal_vel / T - 3.0 * start_vel / T + 6.0 * goal_pos / (T*T) - 6.0 * start_pos / (T*T))
+            + start_acc;
+          if (t == 0) vel = start_vel;
+          vel = vel + dt * acc;
+          if (t == 0) pos = start_pos;
+          pos = pos + dt * vel;
+        }
       }
     protected:
       double time_offset; // [s]

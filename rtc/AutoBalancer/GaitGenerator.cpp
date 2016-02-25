@@ -235,9 +235,12 @@ namespace rats
       ret = refzmp_cur_list[refzmp_index];
       if ( is_same_footstep_phase ) ret = refzmp_cur_list[same_refzmp_index]; // for same footstep
     }
-    double skate_pos = V * T_acc * (std::pow(tau,4) - 0.6 * std::pow(tau,5));
-    double skate_acc = 12.0 * V / T_acc * (std::pow(tau,2) - std::pow(tau,3));
-    double zmp_comp = zc / G * skate_acc - ratio_acc * skate_pos;
+    double zmp_comp = 0;
+    if(T_acc != 0){
+        double skate_pos = V * T_acc * (std::pow(tau,4) - 0.6 * std::pow(tau,5));
+        double skate_acc = 12.0 * V / T_acc * (std::pow(tau,2) - std::pow(tau,3));
+        zmp_comp = zc / G * skate_acc - ratio_acc * skate_pos;
+    }
     ret += hrp::Vector3(zmp_comp,0,0);
   };
 
