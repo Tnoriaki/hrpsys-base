@@ -261,7 +261,7 @@ namespace rats
         foot_x_axises_list.clear();
         swing_leg_types_list.clear();
         step_count_list.clear();
-        same_footstep_index_list.clear();
+        // same_footstep_index_list.clear();
       };
       void push_refzmp_from_footstep_nodes_for_dual (const std::vector<step_node>& fns,
                                                      const std::vector<step_node>& _support_leg_steps,
