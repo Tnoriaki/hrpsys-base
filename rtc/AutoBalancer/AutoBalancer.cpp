@@ -709,10 +709,10 @@ void AutoBalancer::getTargetParameters()
           if(gg->get_skate_acc()(0) != 0){
               //Modify Fx for rolling friction
               m_force[0].data[1] = - m_force[0].data[2] * mu_rolling;
-              m_force[1].data[0] = M * cog_acc(0) - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
+              m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
               //Modify Fz for Static Friction
               double A = mu_rolling * G;
-              double B = cog_acc(0) - gg->get_skate_acc()(0);
+              double B = - gg->get_skate_acc()(0);
               double E = std::sqrt((mu*G)*(mu*G) - cog_acc(1)*cog_acc(1));
               double alpha_lim = (E - B) / (E + A);
 

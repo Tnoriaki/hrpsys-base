@@ -157,28 +157,17 @@ namespace rats
             if ( same_footstep_index_list[it] == refzmp_index ) is_same_footstep_phase = true;
         }
     }
-    // For Skate
-    double V = -take_off_vel(0); // ref velocity
-    double zc = 0.75; // const cog hegiht
-    double G = 9.8; // G
-    double T_acc = dt * double_support_count_half_before; // acc time
-    double tau = 0; // current time ratio
-    double ratio_acc = 0; // zmp y ratio
     // Calculate total reference ZMP
     if (is_start_double_support_phase() || is_end_double_support_phase()) {
         ret = refzmp_cur_list[refzmp_index];
      } else if ( cnt < double_support_static_count_half_before ) { // Start double support static period
         hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index];
         hrp::Vector3 prev_support_zmp = refzmp_cur_list[refzmp_index-1] + zmp_diff * foot_x_axises_list[refzmp_index-1].front();
-        tau =  cnt / (double_support_count_half_before*1.0);
         if ( is_same_footstep_phase ){ // for same footstep
             current_support_zmp = refzmp_cur_list[same_refzmp_index];
             prev_support_zmp = refzmp_cur_list[refzmp_index] + zmp_diff * foot_x_axises_list[refzmp_index].front();
-            T_acc *= 2.0;
-            tau = (cnt+ double_support_count_half_before)/(double_support_count_half_before*2.0);
         }
         double ratio = (is_second_phase()?1.0:0.5);
-        ratio_acc = 0.5;
         ret = (1 - ratio) * current_support_zmp + ratio * prev_support_zmp;
      } else if ( cnt > one_step_count - double_support_static_count_half_after ) { // End double support static period
         hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index+1] + zmp_diff * foot_x_axises_list[refzmp_index+1].front();
@@ -188,29 +177,19 @@ namespace rats
                 current_support_zmp = refzmp_cur_list[refzmp_index+1] + zmp_diff * foot_x_axises_list[refzmp_index+1].front();
             }else{
                 current_support_zmp = refzmp_cur_list[refzmp_index] + zmp_diff * foot_x_axises_list[refzmp_index].front();
-                T_acc *= 2.0;
-                tau = (cnt - one_step_count + double_support_count_half_after) / ( double_support_count_half_after*2.0);
             }
             prev_support_zmp = refzmp_cur_list[same_refzmp_index];
-        } else if ( refzmp_index == same_refzmp_index ){
-            T_acc *= 2.0;
-            tau = (cnt - one_step_count + double_support_count_half_after) / ( double_support_count_half_after*2.0);
         }
         double ratio = (is_second_last_phase()?1.0:0.5);
-        ratio_acc = 0.5;
         ret = (1 - ratio) * prev_support_zmp + ratio * current_support_zmp;
      } else if ( cnt < double_support_count_half_before ) { // Start double support period
         hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index];
         hrp::Vector3 prev_support_zmp = refzmp_cur_list[refzmp_index-1] + zmp_diff * foot_x_axises_list[refzmp_index-1].front();
-        tau = cnt / (double_support_count_half_before*1.0);
         if ( is_same_footstep_phase ){ // for same footstep
             current_support_zmp = refzmp_cur_list[same_refzmp_index];
             prev_support_zmp = refzmp_cur_list[refzmp_index] + zmp_diff * foot_x_axises_list[refzmp_index].front();
-            T_acc *= 2.0;
-            tau = (cnt+ double_support_count_half_before)/(double_support_count_half_before*2.0);
         }
         double ratio = ((is_second_phase()?1.0:0.5) / (double_support_count_half_before-double_support_static_count_half_before)) * (double_support_count_half_before-cnt);
-        ratio_acc = (is_second_phase()?0.5:1.0) * ratio;
         ret = (1 - ratio) * current_support_zmp + ratio * prev_support_zmp;
      } else if ( cnt > one_step_count - double_support_count_half_after ) { // End double support period
         hrp::Vector3 current_support_zmp = refzmp_cur_list[refzmp_index+1] + zmp_diff * foot_x_axises_list[refzmp_index+1].front();
@@ -220,28 +199,15 @@ namespace rats
                 current_support_zmp = refzmp_cur_list[refzmp_index+1] + zmp_diff * foot_x_axises_list[refzmp_index+1].front();
             }else{
                 current_support_zmp = refzmp_cur_list[refzmp_index] + zmp_diff * foot_x_axises_list[refzmp_index].front();
-                T_acc *= 2.0;
-                tau = (cnt - one_step_count + double_support_count_half_after) / ( double_support_count_half_after*2.0);
             }
             prev_support_zmp = refzmp_cur_list[same_refzmp_index];
-        } else if ( refzmp_index == same_refzmp_index ){
-            T_acc *= 2.0;
-            tau = (cnt - one_step_count + double_support_count_half_after) / ( double_support_count_half_after*2.0);
         }
         double ratio = ((is_second_last_phase()?1.0:0.5) / (double_support_count_half_after-double_support_static_count_half_after)) * (cnt - 1 - (one_step_count - double_support_count_half_after));
-        ratio_acc = (is_second_last_phase()?0.5:1.0) * ratio;
         ret = (1 - ratio) * prev_support_zmp + ratio * current_support_zmp;
      } else {
       ret = refzmp_cur_list[refzmp_index];
       if ( is_same_footstep_phase ) ret = refzmp_cur_list[same_refzmp_index]; // for same footstep
     }
-    double zmp_comp = 0;
-    if(T_acc != 0){
-        double skate_pos = V * T_acc * (std::pow(tau,4) - 0.6 * std::pow(tau,5));
-        double skate_acc = 12.0 * V / T_acc * (std::pow(tau,2) - std::pow(tau,3));
-        zmp_comp = zc / G * skate_acc - ratio_acc * skate_pos;
-    }
-    ret += hrp::Vector3(zmp_comp,0,0);
   };
 
   void refzmp_generator::update_refzmp (const std::vector< std::vector<step_node> >& fnsl)
