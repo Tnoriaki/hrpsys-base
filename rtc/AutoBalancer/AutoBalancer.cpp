@@ -708,8 +708,10 @@ void AutoBalancer::getTargetParameters()
 
           if(gg->get_skate_acc()(0) != 0){
               //Modify Fx for rolling friction
-              m_force[0].data[1] = - m_force[0].data[2] * mu_rolling;
-              m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
+              // m_force[0].data[0] = - m_force[0].data[2] * mu_rolling;
+              // m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
+              m_force[1].data[0] = - m_force[0].data[2] * mu_rolling;
+              m_force[0].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
               //Modify Fz for Static Friction
               double A = mu_rolling * G;
               double B = - gg->get_skate_acc()(0);
@@ -730,14 +732,19 @@ void AutoBalancer::getTargetParameters()
               //     m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
               // }
 
-              if ( alpha > alpha_lim ){ // only double support phase
+              if ( alpha < 1 - alpha_lim ){ // only double support phase
+                  // m_force[0].data[2] = M * G * alpha_lim;
+                  // m_force[1].data[2] = M * G * (1-alpha_lim);
+                  // m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
                   m_force[0].data[2] = M * G * alpha_lim;
                   m_force[1].data[2] = M * G * (1-alpha_lim);
-                  m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
+                  m_force[0].data[0] = - M * gg->get_skate_acc()(0) + m_force[1].data[2] * mu_rolling;
               }
           }else{
-              m_force[0].data[1] = 0;
-              m_force[1].data[0] = - M * gg->get_skate_acc()(0);
+              // m_force[0].data[1] = 0;
+              // m_force[1].data[0] = - M * gg->get_skate_acc()(0);
+              m_force[1].data[0] = 0;
+              m_force[0].data[0] = - M * gg->get_skate_acc()(0);
           }
       }
       // set limbCOPOffset
