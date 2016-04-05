@@ -237,6 +237,7 @@ class AutoBalancer
   double m_dt, move_base_gain;
   hrp::BodyPtr m_robot;
   coil::Mutex m_mutex;
+  double mu,mu_rolling;
 
   double transition_interpolator_ratio, transition_time, zmp_transition_time, adjust_footstep_transition_time, leg_names_interpolator_ratio;
   interpolator *zmp_offset_interpolator;
