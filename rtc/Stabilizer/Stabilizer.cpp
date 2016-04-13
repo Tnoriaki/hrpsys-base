@@ -814,7 +814,8 @@ void Stabilizer::getActualParameters ()
           rel_ee_name.push_back(ee_name.back());
       }
       //for ABC ref force
-      // if ( ref_force.size() >= 2 && ref_force[0](2) + ref_force[1](2) == 0 ) ref_force[0](2) = ref_force[1](2) = eefm_gravitational_acceleration * total_mass / 2.0;
+      if ( ref_force.size() >= 2 && ref_force[0](2) + ref_force[1](2) == 0 ) std::cerr << "ABC ref force check!" << std::endl;
+          // ref_force[0](2) = ref_force[1](2) = eefm_gravitational_acceleration * total_mass / 2.0;
 
       // All state variables are foot_origin coords relative
       if (DEBUGP) {
