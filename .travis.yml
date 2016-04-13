@@ -2,6 +2,9 @@ cache: apt
 language:
   - cpp
   - python
+sudo: true
+script:
+  - sudo make install
 python:
   - "2.7"
 compiler:
