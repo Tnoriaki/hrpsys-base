@@ -47,6 +47,7 @@ To use python scripts to create RT components, connect ports and get/set propert
     <li>\ref AccelerationChecker</li>
     <li>\ref AutoBalancer</li>
     <li>\ref AverageFilter</li>
+    <li>\ref Beeper</li>
     <li>\ref CameraImageViewer</li>
     <li>\ref CaptureController</li>
     <li>\ref CollisionDetector</li>
@@ -76,6 +77,7 @@ To use python scripts to create RT components, connect ports and get/set propert
     <li>\ref Range2PointCloud</li>
     <li>\ref RangeDataViewer</li>
     <li>\ref RangeNoiseMixer</li>
+    <li>\ref ReferenceForceUpdater</li>
     <li>\ref RemoveForceSensorLinkOffset</li>
     <li>\ref ResizeImage</li>
     <li>\ref RobotHardware</li>

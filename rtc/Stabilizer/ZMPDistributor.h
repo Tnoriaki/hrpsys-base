@@ -594,6 +594,7 @@ public:
         double alpha_thre = 1e-20;
         // fz_alpha inversion for weighing matrix
         for (size_t i = 0; i < fz_alpha_vector.size(); i++) {
+            fz_alpha_vector[i] *= limb_gains[i];
             fz_alpha_vector[i] = (fz_alpha_vector[i] < alpha_thre) ? 1/alpha_thre : 1/fz_alpha_vector[i];
         }
         for (size_t j = 0; j < fz_alpha_vector.size(); j++) {
@@ -631,8 +632,7 @@ public:
                 for (size_t i = 0; i < state_dim_one; i++) {
                     Kmat(j, i+j*state_dim_one) = 1.0;
                 }
-                reff(j) = ref_foot_force[j](2);
-
+                reff(j) = ref_foot_force[j](2);// total_fz/2.0;
                 KW(j,j) = ref_force_weight;
             }
             Hmat += Kmat.transpose() * KW * Kmat;
