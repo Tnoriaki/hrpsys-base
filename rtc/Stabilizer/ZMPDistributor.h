@@ -570,17 +570,16 @@ public:
     {
         size_t ee_num = ee_name.size();
         std::vector<double> alpha_vector(ee_num), fz_alpha_vector(ee_num);
-        if ( use_cop_distribution ) {
+        if ( use_cop_distribution == false) {
             //calcAlphaVectorFromCOP(alpha_vector, fz_alpha_vector, cop_pos, ee_name, new_refzmp, ref_zmp);
             calcAlphaVectorFromCOPDistance(alpha_vector, fz_alpha_vector, cop_pos, ee_name, new_refzmp, ref_zmp);
         } else {
             calcAlphaVector(alpha_vector, fz_alpha_vector, ee_pos, ee_rot, ee_name, new_refzmp, ref_zmp);
         }
-
         // QP
         double norm_weight = 1e-7;
         double cop_weight = 1e-3;
-        double ref_force_weight = 0;// 1e-3;
+        double ref_force_weight = 1e-3;
         hrp::dvector total_fm(3);
         total_fm(0) = total_fz;
         total_fm(1) = 0;
@@ -631,7 +630,7 @@ public:
             hrp::dvector reff(ee_num);
             for (size_t j = 0; j < ee_num; j++) {
                 for (size_t i = 0; i < state_dim_one; i++) {
-                    Kmat(j,i+j*state_dim_one) = 1.0;
+                    Kmat(j, i+j*state_dim_one) = 1.0;
                 }
                 reff(j) = ref_foot_force[j](2);// total_fz/2.0;
                 KW(j,j) = ref_force_weight;
@@ -659,8 +658,12 @@ public:
         hrp::dvector tmpv(3);
         for (size_t fidx = 0; fidx < ee_num; fidx++) {
             tmpv = mm[fidx] * ff[fidx];
-            ref_foot_force[fidx] = hrp::Vector3(0,0,tmpv(0));
-            ref_foot_moment[fidx] = -1*hrp::Vector3(tmpv(1),tmpv(2),0);
+            // ref_foot_force[fidx] = hrp::Vector3(0,0,tmpv(0));
+            // ref_foot_moment[fidx] = -1*hrp::Vector3(tmpv(1),tmpv(2),0);
+            // std::cerr << "ref force :" << ref_foot_force[fidx](2) - tmpv(0) << std::endl;
+            ref_foot_force[fidx](2) = tmpv(0);
+            ref_foot_moment[fidx](0) = -tmpv(1);
+            ref_foot_moment[fidx](1) = -tmpv(2);
         }
         if (printp) {
             std::cerr << "[" << print_str << "] force moment distribution " << (use_cop_distribution ? "(QP COP)" : "(QP)") << std::endl;
