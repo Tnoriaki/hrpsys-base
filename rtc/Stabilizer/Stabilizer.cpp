@@ -368,6 +368,11 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
   rdx = rdy = rx = ry = 0;
   pdr = hrp::Vector3::Zero();
 
+  // parameters for flywheelST
+  use_flywheel_st = false;
+  flywheel_angle_limit[0] = 5.0;
+  flywheel_angle_limit[1] = 20.0;
+
   // Check is legged robot or not
   is_legged_robot = false;
   for (size_t i = 0; i < stikp.size(); i++) {
@@ -878,6 +883,9 @@ void Stabilizer::getActualParameters ()
 
     // foor modif
     if (control_mode == MODE_ST) {
+      // upper Body Control ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+      if(use_flywheel_st) useFlywheelRotation(ref_moment);
+      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
       hrp::Vector3 f_diff(hrp::Vector3::Zero());
       // moment control
       for (size_t i = 0; i < stikp.size(); i++) {
@@ -1270,7 +1278,12 @@ void Stabilizer::moveBasePosRotForBodyRPYControl ()
     //   Basically Equation (1) and (2) in the paper [1]
     hrp::Vector3 ref_root_rpy = hrp::rpyFromRot(target_root_R);
     for (size_t i = 0; i < 2; i++) {
-        d_rpy[i] = transition_smooth_gain * (eefm_body_attitude_control_gain[i] * (ref_root_rpy(i) - act_base_rpy(i)) - 1/eefm_body_attitude_control_time_const[i] * d_rpy[i]) * dt + d_rpy[i];
+        if ( is_flywheel_st_on[i] || is_flywheel_recovery_on[i] ){
+            d_drpy[i] += d_ddrpy[i] * dt;
+        } else {
+            d_drpy[i] = transition_smooth_gain * (eefm_body_attitude_control_gain[i] * (ref_root_rpy(i) - act_base_rpy(i)) - 1/eefm_body_attitude_control_time_const[i] * d_rpy[i]);
+        }
+        d_rpy[i] =  d_drpy[i] * dt + d_rpy[i];
     }
     rats::rotm3times(current_root_R, target_root_R, hrp::rotFromRpy(d_rpy[0], d_rpy[1], 0));
     m_robot->rootLink()->R = current_root_R;
@@ -1278,6 +1291,78 @@ void Stabilizer::moveBasePosRotForBodyRPYControl ()
     m_robot->calcForwardKinematics();
     current_base_rpy = hrp::rpyFromRot(m_robot->rootLink()->R);
     current_base_pos = m_robot->rootLink()->p;
+};
+
+void Stabilizer::useFlywheelRotation (std::vector<hrp::Vector3>& ref_moment)
+{
+    // Flywheel Rotation Control
+    hrp::Matrix33 Iw;
+    double thetaMax[2];
+    double tauMax[2];
+    double flywheel_moment_thre[2];
+    Eigen::Vector2d tmp_new_refzmp;
+    tmp_new_refzmp(0) = new_refzmp(0);
+    tmp_new_refzmp(1) = new_refzmp(1);
+    SimpleZMPDistributor::leg_type support_leg;
+    if (isContact(contact_states_index_map["rleg"]) && isContact(contact_states_index_map["lleg"])) {
+        support_leg = SimpleZMPDistributor::BOTH;
+    } else if (isContact(contact_states_index_map["rleg"])) {
+        support_leg = SimpleZMPDistributor::RLEG;
+    } else if (isContact(contact_states_index_map["lleg"])) {
+        support_leg = SimpleZMPDistributor::LLEG;
+    }
+    m_robot->calcForwardKinematics(true);
+    m_robot->calcCM();
+    m_robot->rootLink()->calcSubMassCM();
+    m_robot->rootLink()->calcSubMassInertia(Iw);
+    thetaMax[0] = M_PI/180*flywheel_angle_limit[0];
+    thetaMax[1] = M_PI/180*flywheel_angle_limit[1];
+    tauMax[0] = 1.0;
+    tauMax[1] = 10.0;
+    flywheel_moment_thre[0] = std::min(szd->get_leg_inside_margin() * eefm_gravitational_acceleration * total_mass, szd->get_leg_outside_margin() * eefm_gravitational_acceleration * total_mass);
+    flywheel_moment_thre[1] = std::min(szd->get_leg_rear_margin() * eefm_gravitational_acceleration * total_mass, szd->get_leg_front_margin() * eefm_gravitational_acceleration * total_mass);
+    // double J[2];
+    // J[0] = 10.0;
+    // J[1] = 10.0;
+    if (!contact_states[contact_states_index_map["rleg"]] || !contact_states[contact_states_index_map["lleg"]]) flywheel_moment_thre[0] *= 0.5;
+    for (size_t i = 0; i < 2; i++) {
+        flywheel_st_time[i] += dt;
+        if (is_flywheel_st_on[i]) { // FLYWHEEL ST
+            std::cerr << "FLYWHEEL ST ON: " << i <<std::endl;
+            if (flywheel_st_time[i] >= flywheel_st_time_limit[i] || fabs((ref_moment[0]+ref_moment[1])[i]) < 10) { // ST -> RECOVERY
+                is_flywheel_st_on[i] = false;
+                is_flywheel_recovery_on[i] = true;
+                flywheel_st_time_limit[i] = flywheel_st_time[i] + 1.5*fabs(d_drpy0[i])/fabs(flywheel_ddot[i]);
+                flywheel_st_time[i] = 0;
+                flywheel_compensation_moment[i] = - flywheel_compensation_moment[i];
+                flywheel_ddot[i] = - flywheel_ddot[i];
+            }
+        } else if (is_flywheel_recovery_on[i]) { // FLYWHEEL RECOVERY
+            std::cerr << "FLYWHEEL RECOVERY ON: " << i << std::endl;
+            if (flywheel_st_time[i] >= flywheel_st_time_limit[i] ) { // RECOVERY -> STOP
+                is_flywheel_recovery_on[i] = false;
+                flywheel_compensation_moment[i] = 0;
+                flywheel_ddot[i] = 0;
+            }
+        } else { // FLYWHEEL STOP
+            std::cerr << "FLYWHEEL ST OFF: " << i << std::endl;
+            flywheel_st_time[i] = 0.0;
+            if (fabs((ref_moment[0]+ref_moment[1])[i]) > flywheel_moment_thre[i] && fabs(d_rpy[i]) < 0.5*thetaMax[i] && !szd->is_inside_support_polygon(tmp_new_refzmp, rel_ee_pos, rel_ee_rot, rel_ee_name, support_leg, cp_check_margin, - sbp_cog_offset)) { // STOP -> ST
+                is_flywheel_st_on[i] = true;
+                flywheel_st_time[i] = 0.0;
+                d_drpy0[i] = d_drpy[i];
+                flywheel_compensation_moment[i] = std::max(0.5*fabs((ref_moment[0]+ref_moment[1])[i]), fabs((ref_moment[0]+ref_moment[1])[i]) - flywheel_moment_thre[i]) * ((ref_moment[0]+ref_moment[1])[i] > 0 ? 1 : -1);
+                // if (fabs(flywheel_compensation_moment[i]) > tauMax[i]) flywheel_compensation_moment[i] = ((flywheel_compensation_moment[i] > 0) - (flywheel_compensation_moment[i] < 0)) * tauMax[i];
+                // flywheel_ddot[i] = - flywheel_compensation_moment[i] / J[i];
+                flywheel_ddot[i] = - (Iw.inverse() * flywheel_compensation_moment)[i];
+                flywheel_st_time_limit[i] = (-2.0*fabs(d_drpy[i])+sqrt(2.0*pow(d_drpy[i],2)+4.0*fabs(flywheel_ddot[i])*(thetaMax[i]-fabs(d_rpy[i]))))/(2.0*fabs(flywheel_ddot[i]));
+                // flywheel_st_time_limit[i] = sqrt(4.0/fabs(flywheel_ddot[i])*(thetaMax[i] - fabs(d_rpy[i])));
+            }
+        }
+        d_ddrpy[i] = flywheel_ddot[i];
+        ref_moment[0][i] -= ref_moment[0][i] / (ref_moment[0][i]+ref_moment[1][i]) * flywheel_compensation_moment[i];
+        ref_moment[1][i] -= ref_moment[1][i] / (ref_moment[0][i]+ref_moment[1][i]) * flywheel_compensation_moment[i];
+    }
 };
 
 void Stabilizer::calcSwingSupportLimbGain ()
@@ -1547,6 +1632,10 @@ void Stabilizer::sync_2_st ()
   pangx_ref = pangy_ref = pangx = pangy = 0;
   rdx = rdy = rx = ry = 0;
   d_rpy[0] = d_rpy[1] = 0;
+  d_drpy[0] = d_drpy[1] = 0;
+  d_ddrpy[0] = d_ddrpy[1] = 0;
+  is_flywheel_st_on[0] = is_flywheel_st_on[1] = false;
+  is_flywheel_recovery_on[0] = is_flywheel_recovery_on[1] = false;
   pdr = hrp::Vector3::Zero();
   pos_ctrl = hrp::Vector3::Zero();
   for (size_t i = 0; i < stikp.size(); i++) {
@@ -1747,6 +1836,10 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
       i_stp.end_effector_list[i] = ret_ee;
   }
   i_stp.ik_limb_parameters.length(jpe_v.size());
+  i_stp.use_flywheel_st = use_flywheel_st;
+  for (size_t i = 0; i < 2; i++) {
+      i_stp.flywheel_angle_limit[i] = flywheel_angle_limit[i];
+  }
   for (size_t i = 0; i < jpe_v.size(); i++) {
       OpenHRP::StabilizerService::IKLimbParameters& ilp = i_stp.ik_limb_parameters[i];
       ilp.ik_optional_weight_vector.length(jpe_v[i]->numJoints());
@@ -1888,6 +1981,10 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
   }
   contact_decision_threshold = i_stp.contact_decision_threshold;
   is_estop_while_walking = i_stp.is_estop_while_walking;
+  use_flywheel_st = i_stp.use_flywheel_st;
+  for (size_t i = 0; i < 2; i++) {
+    flywheel_angle_limit[i] = i_stp.flywheel_angle_limit[i];
+  }
   if (control_mode == MODE_IDLE) {
       for (size_t i = 0; i < i_stp.end_effector_list.length(); i++) {
           std::vector<STIKParam>::iterator it = std::find_if(stikp.begin(), stikp.end(), (&boost::lambda::_1->* &std::vector<STIKParam>::value_type::ee_name == std::string(i_stp.end_effector_list[i].leg)));
