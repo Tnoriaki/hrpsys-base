@@ -165,6 +165,13 @@ namespace rats
         pz.clear();
         qdata.clear();
     };
+    void modify_preview_queue( const std::deque<Eigen::Matrix<double, 2, 1> > p_modify)
+    {
+        for (size_t i = 0; i < p.size(); i++) {
+            p[i](0) += p_modify[i](0);
+            p[i](1) += p_modify[i](1);
+        }
+    };
     void print_all_queue ()
     {
       std::cerr << "(list ";
@@ -262,6 +269,10 @@ namespace rats
     void remove_preview_queue()
     {
       preview_controller.remove_preview_queue();
+    };
+    void modify_preview_queue(const std::deque<Eigen::Matrix<double, 2, 1> > p_modify)
+    {
+      preview_controller.modify_preview_queue(p_modify);
     };
     void print_all_queue ()
     {

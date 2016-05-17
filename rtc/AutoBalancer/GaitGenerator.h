@@ -859,6 +859,7 @@ namespace rats
     footstep_parameter footstep_param;
     velocity_mode_parameter vel_param, offset_vel_param;
     hrp::Vector3 cog, refzmp, prev_que_rzmp; /* cog by calculating proc_one_tick */
+    hrp::Vector3 act_zmp;
     std::vector<hrp::Vector3> swing_foot_zmp_offsets, prev_que_sfzos;
     double dt; /* control loop [s] */
     std::vector<std::string> all_limbs;
@@ -1086,6 +1087,7 @@ namespace rats
             return false;
         }
     };
+    void set_act_zmp (const hrp::Vector3 _act_zmp) { act_zmp = _act_zmp; };
     bool get_footstep_nodes_by_index (std::vector<step_node>& csl, const size_t idx) const
     {
         if (footstep_nodes_list.size()-1 >= idx) {

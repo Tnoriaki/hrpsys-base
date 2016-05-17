@@ -133,6 +133,8 @@ class AutoBalancer
   std::vector<InPort<TimedDoubleSeq> *> m_ref_forceIn;
   TimedLong m_emergencySignal;
   InPort<TimedLong> m_emergencySignalIn;
+  TimedPoint3D m_actzmp;
+  InPort<TimedPoint3D> m_actzmpIn;
   // for debug
   TimedPoint3D m_cog;
   
@@ -243,7 +245,7 @@ class AutoBalancer
   interpolator *transition_interpolator;
   interpolator *adjust_footstep_interpolator;
   interpolator *leg_names_interpolator;
-  hrp::Vector3 input_zmp, input_basePos;
+  hrp::Vector3 input_zmp, input_basePos, act_zmp;
   hrp::Matrix33 input_baseRot;
 
   // static balance point offsetting

@@ -62,6 +62,7 @@ AutoBalancer::AutoBalancer(RTC::Manager* manager)
       m_AutoBalancerServicePort("AutoBalancerService"),
       m_walkingStatesOut("walkingStates", m_walkingStates),
       m_sbpCogOffsetOut("sbpCogOffset", m_sbpCogOffset),
+      m_actzmpIn("actzmp", m_actzmp),
       // </rtc-template>
       gait_type(BIPED),
       move_base_gain(0.8),
@@ -90,6 +91,7 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
     addInPort("zmpIn", m_zmpIn);
     addInPort("optionalData", m_optionalDataIn);
     addInPort("emergencySignal", m_emergencySignalIn);
+    addInPort("actzmp", m_actzmpIn);
 
     // Set OutPort buffer
     addOutPort("q", m_qOut);
@@ -442,6 +444,12 @@ RTC::ReturnCode_t AutoBalancer::onExecute(RTC::UniqueId ec_id)
         //     gg->emergency_stop();
         // }
     }
+    if (m_actzmpIn.isNew()){
+        m_actzmpIn.read();
+        act_zmp(0) = m_actzmp.data.x;
+        act_zmp(1) = m_actzmp.data.y;
+        act_zmp(2) = m_actzmp.data.z;
+    }
 
     Guard guard(m_mutex);
     hrp::Vector3 ref_basePos;
@@ -625,6 +633,10 @@ void AutoBalancer::getTargetParameters()
     }
     if ( gg_is_walking ) {
       gg->set_default_zmp_offsets(default_zmp_offsets);
+      act_zmp = current_root_R * act_zmp + current_root_p;
+      std::cerr << "diff zmp" << std::endl;
+      std::cerr << (ref_zmp -act_zmp).transpose() << std::endl;
+      gg->set_act_zmp(act_zmp);
       gg_solved = gg->proc_one_tick();
       {
           std::map<leg_type, std::string> leg_type_map = gg->get_leg_type_map();
