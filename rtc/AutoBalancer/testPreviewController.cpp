@@ -43,8 +43,9 @@ int main(int argc, char* argv[])
     ref_zmp_list.push(v);
   }
 
-  //preview_dynamics_filter<preview_control> df(dt, 0.8, ref_zmp_list.front());
-  preview_dynamics_filter<extended_preview_control> df(dt, 0.8, ref_zmp_list.front());
+  // preview_dynamics_filter<preview_control> df(dt, 0.8, ref_zmp_list.front());
+  // preview_dynamics_filter<extended_preview_control> df(dt, 0.8, ref_zmp_list.front());
+  preview_dynamics_filter<preview_control_for_error> df(dt, 0.8, ref_zmp_list.front());
   std::string fname("/tmp/plot.dat");
   FILE* fp = fopen(fname.c_str(), "w");  
   double cart_zmp[3], refzmp[3];

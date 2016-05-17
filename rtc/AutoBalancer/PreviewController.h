@@ -59,6 +59,7 @@ namespace rats
     Eigen::Matrix<double, 1, 2> u_k;
     hrp::dvector f;
     std::deque<Eigen::Matrix<double, 2, 1> > p;
+    std::deque<Eigen::Matrix<double, 2, 1> > p_before;
     std::deque<double> pz;
     std::deque< std::vector<hrp::Vector3> > qdata;
     double zmp_z, cog_z;
@@ -82,7 +83,7 @@ namespace rats
     /* dt = [s], zc = [mm], d = [s] */
     preview_control_base(const double dt, const double zc,
                          const hrp::Vector3& init_xk, const double _gravitational_acceleration, const double d = 1.6)
-      : riccati(), x_k(Eigen::Matrix<double, 3, 2>::Zero()), u_k(Eigen::Matrix<double, 1, 2>::Zero()), p(), pz(), qdata(),
+      : riccati(), x_k(Eigen::Matrix<double, 3, 2>::Zero()), u_k(Eigen::Matrix<double, 1, 2>::Zero()), p(), p_before(), pz(), qdata(),
         zmp_z(0), cog_z(zc), delay(static_cast<size_t>(round(d / dt))), ending_count(1+delay)
     {
       tcA << 1, dt, 0.5 * dt * dt,
@@ -98,6 +99,7 @@ namespace rats
     virtual ~preview_control_base()
     {
       p.clear();
+      p_before.clear();
       pz.clear();
       qdata.clear();
     };
@@ -155,6 +157,7 @@ namespace rats
       size_t num = p.size() - remain_length;
       for (size_t i = 0; i < num; i++) {
         p.pop_back();
+        p_before.back();
         pz.pop_back();
         qdata.pop_back();
       }
@@ -162,6 +165,7 @@ namespace rats
     void remove_preview_queue() // Remove all queue
     {
         p.clear();
+        p_before.clear();
         pz.clear();
         qdata.clear();
     };
@@ -231,6 +235,40 @@ namespace rats
       init_riccati(A, b, c, q, r);
     };
     virtual ~extended_preview_control() {};
+  };
+
+  class preview_control_for_error : public preview_control_base<4>
+  {
+  private:
+    Eigen::Matrix<double, 4, 2> x_k_e;
+    void calc_f();
+    void calc_u();
+    void calc_x_k();
+  public:
+    preview_control_for_error(const double dt, const double zc,
+                             const hrp::Vector3& init_xk, const double _gravitational_acceleration = DEFAULT_GRAVITATIONAL_ACCELERATION, const double q = 1.0,
+                             const double r = 1.0e-6, const double d = 1.6)
+      : preview_control_base<4>(dt, zc, init_xk, _gravitational_acceleration, d), x_k_e(Eigen::Matrix<double, 4, 2>::Zero())
+    {
+      Eigen::Matrix<double, 4, 4> A;
+      Eigen::Matrix<double, 4, 1> b;
+      Eigen::Matrix<double, 1, 4> c;
+      Eigen::Matrix<double, 1, 3> tmpca(tcc * tcA);
+      Eigen::Matrix<double, 1, 1> tmpcb(tcc * tcb);
+      A << 1.0, -tmpca(0,0), -tmpca(0,1), -tmpca(0,2),
+        0.0, tcA(0,0), tcA(0,1), tcA(0,2),
+        0.0, tcA(1,0), tcA(1,1), tcA(1,2),
+        0.0, tcA(2,0), tcA(2,1), tcA(2,2);
+      b << -tmpcb(0,0),
+        tcb(0,0),
+        tcb(1,0),
+        tcb(2,0);
+      c << 1,0,0,0;
+      // x_k_e(0,0) = init_xk(0);
+      // x_k_e(0,1) = init_xk(1);
+      init_riccati(A, b, c, q, r);
+    };
+    virtual ~preview_control_for_error() {};
   };
 
   template <class previw_T>
