@@ -524,8 +524,10 @@ namespace rats
       delete preview_controller_ptr;
       preview_controller_ptr = NULL;
     }
-    //preview_controller_ptr = new preview_dynamics_filter<preview_control>(dt, cog(2) - refzmp_cur_list[0](2), refzmp_cur_list[0]);
-    preview_controller_ptr = new preview_dynamics_filter<extended_preview_control>(dt, cog(2) - rg.get_refzmp_cur()(2), rg.get_refzmp_cur(), gravitational_acceleration);
+    // preview_controller_ptr = new preview_dynamics_filter<preview_control>(dt, cog(2) - refzmp_cur_list[0](2), refzmp_cur_list[0]);
+    // preview_controller_ptr = new preview_dynamics_filter<preview_control>(dt, cog(2) - rg.get_refzmp_cur()(2), rg.get_refzmp_cur(), gravitational_acceleration);
+    // preview_controller_ptr = new preview_dynamics_filter<extended_preview_control>(dt, cog(2) - rg.get_refzmp_cur()(2), rg.get_refzmp_cur(), gravitational_acceleration);
+    preview_controller_ptr = new preview_dynamics_filter<preview_control_for_error>(dt, cog(2) - rg.get_refzmp_cur()(2), rg.get_refzmp_cur(), gravitational_acceleration);
     lcg.reset(one_step_len, footstep_nodes_list.at(1).front().step_time/dt, initial_swing_leg_dst_steps, initial_swing_leg_dst_steps, initial_support_leg_steps, default_double_support_ratio_swing_before, default_double_support_ratio_swing_after);
     /* make another */
     lcg.set_swing_support_steps_list(footstep_nodes_list);
@@ -591,24 +593,24 @@ namespace rats
         prev_que_rzmp = rzmp;
         prev_que_sfzos = sfzos;
       }
-      hrp::Vector3 rzmp_max;
-      hrp::Vector3 rzmp_min;
-      coordinates support_leg_coords;
-      support_leg_coords = lcg.get_support_leg_steps().front().worldcoords;
-      rzmp_max = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(0.1,0.1,0);
-      rzmp_min = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(-0.1,-0.1,0);
-      std::cerr << "zmp sup" << std::endl;
-      std::cerr << rzmp_max.transpose() << std::endl;
-      std::cerr << "zmp inf" << std::endl;
-      std::cerr << rzmp_min.transpose() << std::endl;
-      std::deque<Eigen::Matrix<double, 2, 1> > p_modify;
-      for (size_t i = 0; i < preview_controller_ptr->get_delay()+1; i++) {
-          Eigen::Matrix<double, 2, 1> tmpv;
-          tmpv(0,0) =  - 0.05 * (act_zmp-rzmp)(0) / (i+1);
-          tmpv(1,0) =  - 0.05 * (act_zmp-rzmp)(1) / (i+1);
-          p_modify.push_back(tmpv);
-      }
-      preview_controller_ptr->modify_preview_queue(p_modify);
+      // hrp::Vector3 rzmp_max;
+      // hrp::Vector3 rzmp_min;
+      // coordinates support_leg_coords;
+      // support_leg_coords = lcg.get_support_leg_steps().front().worldcoords;
+      // rzmp_max = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(0.1,0.1,0);
+      // rzmp_min = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(-0.1,-0.1,0);
+      // std::cerr << "zmp sup" << std::endl;
+      // std::cerr << rzmp_max.transpose() << std::endl;
+      // std::cerr << "zmp inf" << std::endl;
+      // std::cerr << rzmp_min.transpose() << std::endl;
+      // std::deque<Eigen::Matrix<double, 2, 1> > p_modify;
+      // for (size_t i = 0; i < preview_controller_ptr->get_delay()+1; i++) {
+      //     Eigen::Matrix<double, 2, 1> tmpv;
+      //     tmpv(0,0) =  - 0.05 * (act_zmp-rzmp)(0) / (i+1);
+      //     tmpv(1,0) =  - 0.05 * (act_zmp-rzmp)(1) / (i+1);
+      //     p_modify.push_back(tmpv);
+      // }
+      // preview_controller_ptr->modify_preview_queue(p_modify);
       solved = preview_controller_ptr->update(refzmp, cog, swing_foot_zmp_offsets, rzmp, sfzos, (refzmp_exist_p || finalize_count < preview_controller_ptr->get_delay()-default_step_time/dt));
     }
 

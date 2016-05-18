@@ -115,6 +115,11 @@ namespace rats
     };
     // void update_zc(double zc);
     size_t get_delay () { return delay; };
+    void get_gain_f (hrp::dvector& _f)
+    {
+      _f.resize(delay+1);
+      _f = f;
+    };
     void get_refcog (double* ret)
     {
       ret[0] = x_k(0,0);
@@ -323,6 +328,7 @@ namespace rats
     void get_current_refzmp (double* ret) { preview_controller.get_current_refzmp(ret);}
     //void get_current_qdata (double* ret) { preview_controller.get_current_qdata(ret);}
     size_t get_delay () { return preview_controller.get_delay(); };
+    void get_gain_f (hrp::dvector& _f) { return preview_controller.get_gain_f(_f);}
   };
 }
 #endif /*PREVIEW_H_*/

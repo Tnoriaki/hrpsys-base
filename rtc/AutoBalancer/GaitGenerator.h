@@ -883,8 +883,9 @@ namespace rats
     bool solved;
 
     /* preview controller parameters */
-    //preview_dynamics_filter<preview_control>* preview_controller_ptr;
-    preview_dynamics_filter<extended_preview_control>* preview_controller_ptr;
+    // preview_dynamics_filter<preview_control>* preview_controller_ptr;
+    // preview_dynamics_filter<extended_preview_control>* preview_controller_ptr;
+    preview_dynamics_filter<preview_control_for_error>* preview_controller_ptr;
 
     void append_go_pos_step_nodes (const coordinates& _ref_coords,
                                    const std::vector<leg_type>& lts)

@@ -47,8 +47,11 @@ int main(int argc, char* argv[])
   // preview_dynamics_filter<extended_preview_control> df(dt, 0.8, ref_zmp_list.front());
   preview_dynamics_filter<preview_control_for_error> df(dt, 0.8, ref_zmp_list.front());
   std::string fname("/tmp/plot.dat");
-  FILE* fp = fopen(fname.c_str(), "w");  
+  std::string fname_("/tmp/fgain.dat");
+  FILE* fp = fopen(fname.c_str(), "w");
+  FILE* fp_ = fopen(fname_.c_str(), "w");
   double cart_zmp[3], refzmp[3];
+  hrp::dvector f;
   bool r = true;
   size_t index = 0;
   while (r) {
@@ -71,7 +74,12 @@ int main(int argc, char* argv[])
     } else if ( !ref_zmp_list.empty() ) r = true;
     if (!ref_zmp_list.empty()) ref_zmp_list.pop();
   }
+  df.get_gain_f(f);
+  for (size_t i = 0; i < f.size(); i++){
+      fprintf(fp_, "%f\n", f[i]);
+  }
   fclose(fp);
+  fclose(fp_);
   if (use_gnuplot) {
   FILE* gp[3];
   std::string titles[2] = {"X", "Y"};
