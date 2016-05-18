@@ -52,6 +52,7 @@ int main(int argc, char* argv[])
   FILE* fp_ = fopen(fname_.c_str(), "w");
   double cart_zmp[3], refzmp[3];
   hrp::dvector f;
+  hrp::dvector K;
   bool r = true;
   size_t index = 0;
   while (r) {
@@ -74,11 +75,16 @@ int main(int argc, char* argv[])
     } else if ( !ref_zmp_list.empty() ) r = true;
     if (!ref_zmp_list.empty()) ref_zmp_list.pop();
   }
+  fclose(fp);
   df.get_gain_f(f);
+  df.get_gain_K(K);
   for (size_t i = 0; i < f.size(); i++){
       fprintf(fp_, "%f\n", f[i]);
   }
-  fclose(fp);
+  fprintf(fp_, "-----\n");
+  for (size_t i = 0; i < K.size(); i++){
+      fprintf(fp_, "%f\n", K[i]);
+  }
   fclose(fp_);
   if (use_gnuplot) {
   FILE* gp[3];
