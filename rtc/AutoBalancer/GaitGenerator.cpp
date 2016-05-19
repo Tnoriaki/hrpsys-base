@@ -621,11 +621,10 @@ namespace rats
           double kappa = 0.0;
           double r = 0.0;
           coordinates support_leg_coords = lcg.get_support_leg_steps().front().worldcoords;
-          refzmp_max = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(0.1,0.1,0);
-          refzmp_min = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(-0.1,-0.1,0);
+          refzmp_max = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(0.1,0.1,0) * 10;
+          refzmp_min = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(-0.1,-0.1,0) * 10;
           for(size_t i = 0; i < 2; i++){
               double error = refzmp_list[0](i) - act_zmp(i); // p_ref(k+1) - p_act(k+1) ( p_act(k+1) = p_act(k) + p_cart(k+1) - p_cart(k) )
-              // if (i == 0) error = 0;
               for(size_t j = 0; j < refzmp_comp_list.size(); j++){
                   if(j < single_support_count){
                       if(error > 0) refzmp_comp_list(j,i) = refzmp_max(i) - refzmp_list[j](i); // calc refzmp compensation
@@ -636,9 +635,10 @@ namespace rats
               current_refzmp_comp(i) = 0.1; // p_ref(k)
               kappa -= riccati_B(0) * gain_K(0) * current_refzmp_comp(i);
               if (refzmp_comp_list(0,i) - kappa != 0) r = - error / (refzmp_comp_list(0,i) - kappa);
-              if (fabs(r) > 1) r = 1.0 * ( r > 0 ? 1 : -1);
-              std::cerr << "r: " << i << std::endl;
-              std::cerr << r << std::endl;
+              if (fabs(r) > 1) {
+                  r = 1.0 * ( r > 0 ? 1 : -1);
+                  std::cerr << "emergency!!! at " << i << std::endl;
+              }
               current_refzmp_comp(i) *= r;
               refzmp_comp_list.col(i) *= r;
               for (size_t k = 0; k < current_x_e.cols(); k++){
