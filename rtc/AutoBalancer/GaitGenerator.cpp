@@ -597,15 +597,17 @@ namespace rats
       double current_cart_zmp[3]; // p_ref_cart(k)
       double next_cart_zmp[3]; // p_ref_cart(k+1)
       std::deque<Eigen::Matrix<double, 2, 1> > refzmp_list;
+      Eigen::Matrix<double, 4,2> current_x_e; //  x_k_e(k)
       hrp::dvector gain_K,gain_f,riccati_B,u_k;
       hrp::dmatrix riccati_A;
-      preview_controller_ptr->get_all_queue(refzmp_list); // p_ref(k,k+1,k+2,...k+N-1)
+      // preview_controller_ptr->get_all_queue(refzmp_list); // p_ref(k,k+1,k+2,...k+N-1)
       preview_controller_ptr->get_cart_zmp(current_cart_zmp);
       preview_controller_ptr->get_gain_K(gain_K); // const
       preview_controller_ptr->get_gain_f(gain_f); // const
       preview_controller_ptr->get_riccati_B(riccati_B); // const
       preview_controller_ptr->get_riccati_A(riccati_A); // const
       preview_controller_ptr->get_u_k(u_k); // u(k-1)
+      preview_controller_ptr->get_x_k_e(current_x_e); // x_k_e(k)
       solved = preview_controller_ptr->update(refzmp, cog, swing_foot_zmp_offsets, rzmp, sfzos, (refzmp_exist_p || finalize_count < preview_controller_ptr->get_delay()-default_step_time/dt)); // first preview control
       preview_controller_ptr->get_all_queue(refzmp_list); // p_ref(k+1,k+2,...k+N)
       preview_controller_ptr->get_cart_zmp(next_cart_zmp);
@@ -616,24 +618,38 @@ namespace rats
       single_support_count = lcg.get_lcg_count() - size_t(default_step_time*default_double_support_ratio_after/dt); // one_step_count -> one_step_count - double_support_count_after
       if ( single_support_count < size_t(default_step_time*default_double_support_ratio_before/dt) && single_support_count > 0 ){ // only single support phase
           hrp::Vector3 refzmp_max,refzmp_min;
-          double kappa,r;
+          double kappa = 0.0;
+          double r = 0.0;
           coordinates support_leg_coords = lcg.get_support_leg_steps().front().worldcoords;
           refzmp_max = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(0.1,0.1,0);
           refzmp_min = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(-0.1,-0.1,0);
           for(size_t i = 0; i < 2; i++){
+              double error = refzmp_list[0](i) - act_zmp(i) + (next_cart_zmp[i] - current_cart_zmp[i]); // p_ref(k+1) - p_act(k+1) ( p_act(k+1) = p_act(k) + p_cart(k+1) - p_cart(k) )
               for(size_t j = 0; j < refzmp_comp_list.size(); j++){
-                  if(j < single_support_count) refzmp_comp_list(j,i) = refzmp_max(i) - refzmp_list[j](i)); // calc refzmp compensation
-                  kappa -= riccati_B(0) * gain_f(j) * refzmp_comp_list(j,i);
+                  if(j < single_support_count){
+                      if(error > 0) refzmp_comp_list(j,i) = refzmp_max(i) - refzmp_list[j](i); // calc refzmp compensation
+                      if(error < 0) refzmp_comp_list(j,i) = refzmp_min(i) - refzmp_list[j](i); // calc refzmp compensation
+                      kappa -= riccati_B(0) * gain_f(j) * refzmp_comp_list(j,i);
+                  }
               }
               current_refzmp_comp(i) = 0.1; // p_ref(k)
               kappa -= riccati_B(0) * gain_K(0) * current_refzmp_comp(i);
-              r = (act_zmp(i) + (next_cart_zmp - current_cart_zmp)(i) - refzmp_list[0](i)) / (refzmp_comp_list(0,i) - kappa); // p_act(k+1) = p_act(k) + p_cart(k+1) - p_cart(k)
-              if (fabs(r) > 1) r = 1;
+              if (refzmp_comp_list(0,i) - kappa != 0) r = - error / (refzmp_comp_list(0,i) - kappa);
+              if(fabs(r) > 1) r = 1.0 * ( r > 0 ? 1 : -1);
               current_refzmp_comp(i) *= r;
               refzmp_comp_list.col(i) *= r;
           }
+      //Set modified refzmp_list & modified extended_x
+      preview_controller_ptr->modify_preview_queue(refzmp_comp_list); // p_ref(k+1,k+2,...k+N) += p_ref+(k+1,k+2,...k+N)
+      current_x_e(0,0) += current_refzmp_comp(0); // p_ref(k).x += p_ref+(k).x
+      current_x_e(0,1) += current_refzmp_comp(1); // p_ref(k).y += p_ref+(k).y
+      preview_controller_ptr->set_x_k_e(current_x_e);
+      solved = preview_controller_ptr->reupdate(refzmp, cog, swing_foot_zmp_offsets, (refzmp_exist_p || finalize_count < preview_controller_ptr->get_delay()-default_step_time/dt));
+      preview_controller_ptr->set_all_queue(refzmp_list);
+      current_x_e(0,0) -= current_refzmp_comp(0); // p_ref(k).x += p_ref+(k).x
+      current_x_e(0,1) -= current_refzmp_comp(1); // p_ref(k).y += p_ref+(k).y
+      preview_controller_ptr->set_x_k_e(current_x_e);
       }
-      solved = preview_controller_ptr->update(refzmp, cog, swing_foot_zmp_offsets, rzmp, sfzos, (refzmp_exist_p || finalize_count < preview_controller_ptr->get_delay()-default_step_time/dt)); // second preview control
     }
     rg.update_refzmp(footstep_nodes_list);
     // { // debug

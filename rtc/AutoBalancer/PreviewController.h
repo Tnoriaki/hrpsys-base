@@ -114,31 +114,33 @@ namespace rats
       ending_count--;
     };
     // void update_zc(double zc);
+    virtual void get_x_k_e (Eigen::Matrix<double, 4, 2>& _x_k_e){};
+    virtual void set_x_k_e (Eigen::Matrix<double, 4, 2>& _x_k_e){};
     size_t get_delay () { return delay; };
     void get_all_queue ( std::deque<Eigen::Matrix<double, 2, 1> >& _p)
     {
       _p = p;
-    }
+    };
     void get_u_k (hrp::dvector& _u_k)
     {
       _u_k.resize(u_k.cols());
       _u_k = u_k;
-    }
+    };
     void get_riccati_A (hrp::dmatrix& _A)
     {
       _A.resize(riccati.A.rows(),riccati.A.cols());
       _A = riccati.A;
-    }
+    };
     void get_riccati_B (hrp::dvector& _B)
     {
       _B.resize(riccati.b.rows());
       _B = riccati.b;
-    }
+    };
     void get_gain_K (hrp::dvector& _K)
     {
       _K.resize(riccati.K.cols());
       _K = riccati.K;
-    }
+    };
     void get_gain_f (hrp::dvector& _f)
     {
       _f.resize(delay+1);
@@ -198,6 +200,13 @@ namespace rats
         pz.clear();
         qdata.clear();
     };
+    void modify_preview_queue(const hrp::dmatrix p_comp)
+    {
+      for (size_t i = 0; i < p.size(); i++) {
+        p[i](0) += p_comp(i,0);
+        p[i](1) += p_comp(i,1);
+      }
+    };
     void set_all_queue(const std::deque<Eigen::Matrix<double, 2, 1> >& _p)
     {
       p = _p;
@@ -227,6 +236,8 @@ namespace rats
       init_riccati(tcA, tcb, tcc, q, r);
     };
     virtual ~preview_control() {};
+    void set_x_k_e(const Eigen::Matrix<double, 4,2>& _x_k_e){};
+    void get_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){};
   };
 
   class extended_preview_control : public preview_control_base<4>
@@ -235,7 +246,7 @@ namespace rats
     Eigen::Matrix<double, 4, 2> x_k_e;
     void calc_f();
     void calc_u();
-    void calc_x_k();
+    // void calc_x_k();
   public:
     extended_preview_control(const double dt, const double zc,
                              const hrp::Vector3& init_xk, const double _gravitational_acceleration = DEFAULT_GRAVITATIONAL_ACCELERATION, const double q = 1.0,
@@ -261,6 +272,9 @@ namespace rats
       init_riccati(A, b, c, q, r);
     };
     virtual ~extended_preview_control() {};
+    void calc_x_k();
+    void set_x_k_e(const Eigen::Matrix<double, 4,2>& _x_k_e){x_k_e = _x_k_e;};
+    void get_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){_x_k_e = x_k_e;};
   };
 
   class preview_control_for_error : public preview_control_base<4>
@@ -326,6 +340,24 @@ namespace rats
       }
       return flg;
     };
+    bool reupdate(hrp::Vector3& p_ret, hrp::Vector3& x_ret, std::vector<hrp::Vector3>& qdata_ret, const bool updatep)
+    {
+      bool flg;
+      if (updatep) {
+        preview_controller.calc_x_k();
+        flg = preview_controller.is_doing();
+      } else {
+        if ( !preview_controller.is_end() )
+          preview_controller.update_x_k();
+        flg = !preview_controller.is_end();
+      }
+      if (flg) {
+        preview_controller.get_current_refzmp(p_ret.data());
+        preview_controller.get_refcog(x_ret.data());
+        preview_controller.get_current_qdata(qdata_ret);
+      }
+      return flg;
+    };
     void remove_preview_queue(const size_t remain_length)
     {
       preview_controller.remove_preview_queue(remain_length);
@@ -333,6 +365,10 @@ namespace rats
     void remove_preview_queue()
     {
       preview_controller.remove_preview_queue();
+    };
+    void modify_preview_queue(const hrp::dmatrix& p_comp)
+    {
+      preview_controller.modify_preview_queue(p_comp);
     };
     void set_all_queue(const std::deque<Eigen::Matrix<double, 2, 1> >& p)
     {
@@ -355,6 +391,8 @@ namespace rats
     void get_riccati_A (hrp::dmatrix& _A) { return preview_controller.get_riccati_A(_A);}
     void get_riccati_B (hrp::dvector& _B) { return preview_controller.get_riccati_B(_B);}
     void get_u_k (hrp::dvector& _u_k) { return preview_controller.get_u_k(_u_k);}
+    void set_x_k_e(const Eigen::Matrix<double, 4,2>& _x_k_e){ preview_controller.set_x_k_e(_x_k_e); };
+    void get_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){ preview_controller.get_x_k_e(_x_k_e); };
   };
 }
 #endif /*PREVIEW_H_*/
