@@ -57,6 +57,7 @@ Stabilizer::Stabilizer(RTC::Manager* manager)
     m_qRefOut("q", m_qRef),
     m_tauOut("tau", m_tau),
     m_zmpOut("zmp", m_zmp),
+    m_cogOut("cog", m_cog),
     m_refCPOut("refCapturePoint", m_refCP),
     m_actCPOut("actCapturePoint", m_actCP),
     m_actContactStatesOut("actContactStates", m_actContactStates),
@@ -118,6 +119,7 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
   addOutPort("q", m_qRefOut);
   addOutPort("tau", m_tauOut);
   addOutPort("zmp", m_zmpOut);
+  addOutPort("cog", m_cogOut);
   addOutPort("refCapturePoint", m_refCPOut);
   addOutPort("actCapturePoint", m_actCPOut);
   addOutPort("actContactStates", m_actContactStatesOut);
@@ -583,6 +585,11 @@ RTC::ReturnCode_t Stabilizer::onExecute(RTC::UniqueId ec_id)
       m_zmp.data.z = rel_act_zmp(2);
       m_zmp.tm = m_qRef.tm;
       m_zmpOut.write();
+      m_cog.data.x = rel_cog(0);
+      m_cog.data.y = rel_cog(1);
+      m_cog.data.z = rel_cog(2);
+      m_cog.tm = m_qRef.tm;
+      m_cogOut.write();
       m_refCP.data.x = rel_ref_cp(0);
       m_refCP.data.y = rel_ref_cp(1);
       m_refCP.data.z = rel_ref_cp(2);

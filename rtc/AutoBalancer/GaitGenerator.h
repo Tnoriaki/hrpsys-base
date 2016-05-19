@@ -859,7 +859,7 @@ namespace rats
     footstep_parameter footstep_param;
     velocity_mode_parameter vel_param, offset_vel_param;
     hrp::Vector3 cog, refzmp, prev_que_rzmp; /* cog by calculating proc_one_tick */
-    hrp::Vector3 act_zmp;
+    hrp::Vector3 act_zmp, act_cog, act_cogvel;
     std::vector<hrp::Vector3> swing_foot_zmp_offsets, prev_que_sfzos;
     double dt; /* control loop [s] */
     std::vector<std::string> all_limbs;
@@ -885,7 +885,7 @@ namespace rats
     /* preview controller parameters */
     // preview_dynamics_filter<preview_control>* preview_controller_ptr;
     // preview_dynamics_filter<extended_preview_control>* preview_controller_ptr;
-    preview_dynamics_filter<preview_control_for_error>* preview_controller_ptr;
+    preview_dynamics_filter<extended_preview_control>* preview_controller_ptr;
 
     void append_go_pos_step_nodes (const coordinates& _ref_coords,
                                    const std::vector<leg_type>& lts)
@@ -1089,6 +1089,8 @@ namespace rats
         }
     };
     void set_act_zmp (const hrp::Vector3 _act_zmp) { act_zmp = _act_zmp; };
+    void set_act_cog (const hrp::Vector3 _act_cog) { act_cog = _act_cog; };
+    void set_act_cogvel (const hrp::Vector3 _act_cogvel) { act_cogvel = _act_cogvel; };
     bool get_footstep_nodes_by_index (std::vector<step_node>& csl, const size_t idx) const
     {
         if (footstep_nodes_list.size()-1 >= idx) {

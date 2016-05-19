@@ -115,10 +115,29 @@ namespace rats
     };
     // void update_zc(double zc);
     size_t get_delay () { return delay; };
+    void get_all_queue ( std::deque<Eigen::Matrix<double, 2, 1> >& _p)
+    {
+      _p = p;
+    }
+    void get_u_k (hrp::dvector& _u_k)
+    {
+      _u_k.resize(u_k.cols());
+      _u_k = u_k;
+    }
+    void get_riccati_A (hrp::dmatrix& _A)
+    {
+      _A.resize(riccati.A.rows(),riccati.A.cols());
+      _A = riccati.A;
+    }
+    void get_riccati_B (hrp::dvector& _B)
+    {
+      _B.resize(riccati.b.rows());
+      _B = riccati.b;
+    }
     void get_gain_K (hrp::dvector& _K)
     {
-      _K.resize(riccati.K.rows());
-      _K = riccati.K.row(0);
+      _K.resize(riccati.K.cols());
+      _K = riccati.K;
     }
     void get_gain_f (hrp::dvector& _f)
     {
@@ -179,12 +198,9 @@ namespace rats
         pz.clear();
         qdata.clear();
     };
-    void modify_preview_queue( const std::deque<Eigen::Matrix<double, 2, 1> > p_modify)
+    void set_all_queue(const std::deque<Eigen::Matrix<double, 2, 1> >& _p)
     {
-        for (size_t i = 0; i < p.size(); i++) {
-            p[i](0) += p_modify[i](0);
-            p[i](1) += p_modify[i](1);
-        }
+      p = _p;
     };
     void print_all_queue ()
     {
@@ -318,9 +334,9 @@ namespace rats
     {
       preview_controller.remove_preview_queue();
     };
-    void modify_preview_queue(const std::deque<Eigen::Matrix<double, 2, 1> > p_modify)
+    void set_all_queue(const std::deque<Eigen::Matrix<double, 2, 1> >& p)
     {
-      preview_controller.modify_preview_queue(p_modify);
+      preview_controller.set_all_queue(p);
     };
     void print_all_queue ()
     {
@@ -333,8 +349,12 @@ namespace rats
     void get_current_refzmp (double* ret) { preview_controller.get_current_refzmp(ret);}
     //void get_current_qdata (double* ret) { preview_controller.get_current_qdata(ret);}
     size_t get_delay () { return preview_controller.get_delay(); };
+    void get_all_queue (std::deque<Eigen::Matrix<double, 2, 1> >& _p) { return preview_controller.get_all_queue(_p);}
     void get_gain_f (hrp::dvector& _f) { return preview_controller.get_gain_f(_f);}
     void get_gain_K (hrp::dvector& _K) { return preview_controller.get_gain_K(_K);}
+    void get_riccati_A (hrp::dmatrix& _A) { return preview_controller.get_riccati_A(_A);}
+    void get_riccati_B (hrp::dvector& _B) { return preview_controller.get_riccati_B(_B);}
+    void get_u_k (hrp::dvector& _u_k) { return preview_controller.get_u_k(_u_k);}
   };
 }
 #endif /*PREVIEW_H_*/
