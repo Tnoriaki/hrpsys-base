@@ -606,14 +606,14 @@ namespace rats
       preview_controller_ptr->get_gain_f(gain_f); // const
       preview_controller_ptr->get_riccati_B(riccati_B); // const
       preview_controller_ptr->get_riccati_A(riccati_A); // const
-      preview_controller_ptr->get_u_k(u_k); // u(k-1)
       preview_controller_ptr->get_x_k_e(current_x_e); // x_k_e(k)
       solved = preview_controller_ptr->update(refzmp, cog, swing_foot_zmp_offsets, rzmp, sfzos, (refzmp_exist_p || finalize_count < preview_controller_ptr->get_delay()-default_step_time/dt)); // first preview control
+      preview_controller_ptr->get_u_k(u_k); // u(k)
       preview_controller_ptr->get_all_queue(refzmp_list); // p_ref(k+1,k+2,...k+N)
       preview_controller_ptr->get_cart_zmp(next_cart_zmp);
       size_t single_support_count;
       hrp::dmatrix refzmp_comp_list; // p_ref+(k+1,k+2,...k+N) or p_ref-(k+1,k+2,...k+N)
-      hrp::Vector3 current_refzmp_comp = hrp::Vector3::Zero(); // p_ref(k)
+      hrp::Vector3 current_refzmp_comp = hrp::Vector3::Zero(); // p_ref+(k)
       refzmp_comp_list = hrp::dmatrix::Zero(preview_controller_ptr->get_delay(),2);
       single_support_count = lcg.get_lcg_count() - size_t(default_step_time*default_double_support_ratio_after/dt); // one_step_count -> one_step_count - double_support_count_after
       if ( single_support_count < size_t(default_step_time*default_double_support_ratio_before/dt) && single_support_count > 0 ){ // only single support phase
@@ -624,31 +624,43 @@ namespace rats
           refzmp_max = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(0.1,0.1,0);
           refzmp_min = support_leg_coords.pos + support_leg_coords.rot * hrp::Vector3(-0.1,-0.1,0);
           for(size_t i = 0; i < 2; i++){
-              double error = refzmp_list[0](i) - act_zmp(i) + (next_cart_zmp[i] - current_cart_zmp[i]); // p_ref(k+1) - p_act(k+1) ( p_act(k+1) = p_act(k) + p_cart(k+1) - p_cart(k) )
+              double error = refzmp_list[0](i) - act_zmp(i); // p_ref(k+1) - p_act(k+1) ( p_act(k+1) = p_act(k) + p_cart(k+1) - p_cart(k) )
+              // if (i == 0) error = 0;
               for(size_t j = 0; j < refzmp_comp_list.size(); j++){
                   if(j < single_support_count){
                       if(error > 0) refzmp_comp_list(j,i) = refzmp_max(i) - refzmp_list[j](i); // calc refzmp compensation
                       if(error < 0) refzmp_comp_list(j,i) = refzmp_min(i) - refzmp_list[j](i); // calc refzmp compensation
-                      kappa -= riccati_B(0) * gain_f(j) * refzmp_comp_list(j,i);
+                      kappa += riccati_B(0) * gain_f(j) * refzmp_comp_list(j,i);
                   }
               }
               current_refzmp_comp(i) = 0.1; // p_ref(k)
               kappa -= riccati_B(0) * gain_K(0) * current_refzmp_comp(i);
               if (refzmp_comp_list(0,i) - kappa != 0) r = - error / (refzmp_comp_list(0,i) - kappa);
-              if(fabs(r) > 1) r = 1.0 * ( r > 0 ? 1 : -1);
+              if (fabs(r) > 1) r = 1.0 * ( r > 0 ? 1 : -1);
+              std::cerr << "r: " << i << std::endl;
+              std::cerr << r << std::endl;
               current_refzmp_comp(i) *= r;
               refzmp_comp_list.col(i) *= r;
+              for (size_t k = 0; k < current_x_e.cols(); k++){
+                  current_x_e(k,i) = r * kappa / riccati_B(0) * riccati_B(k);
+              }
           }
+          if ( refzmp_list.size() > preview_controller_ptr->get_delay() ){
+              preview_controller_ptr->add_x_k_e(current_x_e);
+          }
+          double modif_cog[3];
+          preview_controller_ptr->get_refcog(modif_cog);
+          cog(0) = modif_cog[0];
+          cog(1) = modif_cog[1];
       //Set modified refzmp_list & modified extended_x
-      preview_controller_ptr->modify_preview_queue(refzmp_comp_list); // p_ref(k+1,k+2,...k+N) += p_ref+(k+1,k+2,...k+N)
-      current_x_e(0,0) += current_refzmp_comp(0); // p_ref(k).x += p_ref+(k).x
-      current_x_e(0,1) += current_refzmp_comp(1); // p_ref(k).y += p_ref+(k).y
-      preview_controller_ptr->set_x_k_e(current_x_e);
-      solved = preview_controller_ptr->reupdate(refzmp, cog, swing_foot_zmp_offsets, (refzmp_exist_p || finalize_count < preview_controller_ptr->get_delay()-default_step_time/dt));
-      preview_controller_ptr->set_all_queue(refzmp_list);
-      current_x_e(0,0) -= current_refzmp_comp(0); // p_ref(k).x += p_ref+(k).x
-      current_x_e(0,1) -= current_refzmp_comp(1); // p_ref(k).y += p_ref+(k).y
-      preview_controller_ptr->set_x_k_e(current_x_e);
+      // preview_controller_ptr->modify_preview_queue(refzmp_comp_list); // p_ref(k+1,k+2,...k+N) += p_ref+(k+1,k+2,...k+N)
+      // current_x_e(0,0) += current_refzmp_comp(0); // p_ref(k).x += p_ref+(k).x
+      // current_x_e(0,1) += current_refzmp_comp(1); // p_ref(k).y += p_ref+(k).y
+      // solved = preview_controller_ptr->reupdate(refzmp, cog, swing_foot_zmp_offsets, (refzmp_exist_p || finalize_count < preview_controller_ptr->get_delay()-default_step_time/dt));
+      // preview_controller_ptr->set_all_queue(refzmp_list);
+      // current_x_e(0,0) -= current_refzmp_comp(0); // p_ref(k).x += p_ref+(k).x
+      // current_x_e(0,1) -= current_refzmp_comp(1); // p_ref(k).y += p_ref+(k).y
+      // preview_controller_ptr->set_x_k_e(current_x_e);
       }
     }
     rg.update_refzmp(footstep_nodes_list);
