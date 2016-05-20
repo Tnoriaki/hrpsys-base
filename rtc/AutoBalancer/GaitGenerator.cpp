@@ -635,6 +635,7 @@ namespace rats
               // current_refzmp_comp(i) = 0.1; // p_ref(k)
               // kappa -= riccati_B(0) * gain_K(0) * current_refzmp_comp(i);
               if (refzmp_comp_list(0,i) - kappa != 0) r = - error / (refzmp_comp_list(0,i) - kappa);
+              std::cerr << "r[" << i << "]" << std::endl;
               std::cerr << r << std::endl;
               if (fabs(r) > 1) {
                   r = 1.0 * ( r > 0 ? 1 : -1);
@@ -651,6 +652,9 @@ namespace rats
           }
           double modif_cog[3];
           preview_controller_ptr->get_refcog(modif_cog);
+          std::cerr << "cog comp" << std::endl; 
+          std::cerr << modif_cog[0] - cog[0] << std::endl;
+          std::cerr << modif_cog[1] - cog[1] << std::endl;
           cog(0) = modif_cog[0];
           cog(1) = modif_cog[1];
       //Set modified refzmp_list & modified extended_x
