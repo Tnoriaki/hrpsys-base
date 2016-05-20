@@ -881,6 +881,7 @@ namespace rats
     std::map<leg_type, std::string> leg_type_map;
     coordinates initial_foot_mid_coords;
     bool solved;
+    bool use_zmp_feedback_walk;
 
     /* preview controller parameters */
     // preview_dynamics_filter<preview_control>* preview_controller_ptr;
@@ -927,7 +928,7 @@ namespace rats
         vel_param(), offset_vel_param(), cog(hrp::Vector3::Zero()), refzmp(hrp::Vector3::Zero()), prev_que_rzmp(hrp::Vector3::Zero()),
         dt(_dt), default_step_time(1.0), default_double_support_ratio_before(0.1), default_double_support_ratio_after(0.1), default_double_support_static_ratio_before(0.0), default_double_support_static_ratio_after(0.0), default_double_support_ratio_swing_before(0.1), default_double_support_ratio_swing_after(0.1), gravitational_acceleration(DEFAULT_GRAVITATIONAL_ACCELERATION),
         finalize_count(0), optional_go_pos_finalize_footstep_num(0), overwrite_footstep_index(0), overwritable_footstep_index_offset(1),
-        velocity_mode_flg(VEL_IDLING), emergency_flg(IDLING),
+        velocity_mode_flg(VEL_IDLING), emergency_flg(IDLING),use_zmp_feedback_walk(false),
         use_inside_step_limitation(true),
         preview_controller_ptr(NULL) {
         swing_foot_zmp_offsets = boost::assign::list_of<hrp::Vector3>(hrp::Vector3::Zero());
@@ -1044,6 +1045,7 @@ namespace rats
       footstep_param.stride_bwd_x = _stride_bwd_x;
     };
     void set_use_inside_step_limitation(const bool uu) { use_inside_step_limitation = uu; };
+    void set_use_zmp_feedback_walk(const bool _use_zmp_feedback_walk) { use_zmp_feedback_walk = _use_zmp_feedback_walk; };
     void set_default_orbit_type (const orbit_type type) { lcg.set_default_orbit_type(type); };
     void set_swing_trajectory_delay_time_offset (const double _time_offset) { lcg.set_swing_trajectory_delay_time_offset(_time_offset); };
     void set_swing_trajectory_final_distance_weight (const double _final_distance_weight) { lcg.set_swing_trajectory_final_distance_weight(_final_distance_weight); };
@@ -1207,6 +1209,7 @@ namespace rats
         }
         return fsnl;
     };
+    bool get_use_zmp_feedback_walk () const { return use_zmp_feedback_walk; };
     orbit_type get_default_orbit_type () const { return lcg.get_default_orbit_type(); };
     double get_swing_trajectory_delay_time_offset () const { return lcg.get_swing_trajectory_delay_time_offset(); };
     double get_swing_trajectory_final_distance_weight () const { return lcg.get_swing_trajectory_final_distance_weight(); };

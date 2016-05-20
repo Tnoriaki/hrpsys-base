@@ -1400,6 +1400,7 @@ bool AutoBalancer::setGaitGeneratorParam(const OpenHRP::AutoBalancerService::Gai
   gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio/2.0);
   gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio/2.0);
   gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio/2.0);
+  gg->set_use_zmp_feedback_walk(i_param.use_zmp_feedback_walk);
   // gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio_before);
   // gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio_after);
   // gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio_before);
@@ -1470,6 +1471,7 @@ bool AutoBalancer::getGaitGeneratorParam(OpenHRP::AutoBalancerService::GaitGener
   i_param.default_double_support_ratio_swing_after = gg->get_default_double_support_ratio_swing_after();
   i_param.default_double_support_ratio = i_param.default_double_support_ratio_before + i_param.default_double_support_ratio_after;
   i_param.default_double_support_static_ratio = i_param.default_double_support_static_ratio_before + i_param.default_double_support_static_ratio_after;
+  i_param.use_zmp_feedback_walk = gg->get_use_zmp_feedback_walk();
   if (gg->get_default_orbit_type() == SHUFFLING) {
     i_param.default_orbit_type = OpenHRP::AutoBalancerService::SHUFFLING;
   } else if (gg->get_default_orbit_type() == CYCLOID) {
