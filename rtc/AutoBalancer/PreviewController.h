@@ -114,8 +114,10 @@ namespace rats
       ending_count--;
     };
     // void update_zc(double zc);
+    void get_x_k (Eigen::Matrix<double, 3, 2>& _x_k){ _x_k = x_k; };
+    void set_x_k (Eigen::Matrix<double, 3, 2>& _x_k){ x_k = _x_k; };
     virtual void get_x_k_e (Eigen::Matrix<double, 4, 2>& _x_k_e){};
-    virtual void add_x_k_e (Eigen::Matrix<double, 4, 2>& _x_k_e){};
+    virtual void set_x_k_e (Eigen::Matrix<double, 4, 2>& _x_k_e){};
     size_t get_delay () { return delay; };
     void get_all_queue ( std::deque<Eigen::Matrix<double, 2, 1> >& _p)
     {
@@ -236,8 +238,8 @@ namespace rats
       init_riccati(tcA, tcb, tcc, q, r);
     };
     virtual ~preview_control() {};
-    void add_x_k_e(const Eigen::Matrix<double, 4,2>& _x_k_e){};
     void get_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){};
+    void set_x_k_e(const Eigen::Matrix<double, 4,2>& _x_k_e){};
   };
 
   class extended_preview_control : public preview_control_base<4>
@@ -273,11 +275,11 @@ namespace rats
     };
     virtual ~extended_preview_control() {};
     void calc_x_k();
-    void add_x_k_e(const Eigen::Matrix<double, 4,2>& _x_k_e){
-        // x_k_e += _x_k_e;
-        for (size_t i = 0; i < 3; i++)
-            for (size_t j = 0; j < 2; j++)
-                x_k(i,j) += _x_k_e(i+1,j);
+    void set_x_k_e(const Eigen::Matrix<double, 4,2>& _x_k_e){
+        x_k_e = _x_k_e;
+        // for (size_t i = 0; i < 3; i++)
+        //     for (size_t j = 0; j < 2; j++)
+        //         x_k(i,j) += _x_k_e(i+1,j);
     };
     void get_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){_x_k_e = x_k_e;};
   };
@@ -397,8 +399,10 @@ namespace rats
     void get_riccati_A (hrp::dmatrix& _A) { return preview_controller.get_riccati_A(_A);}
     void get_riccati_B (hrp::dvector& _B) { return preview_controller.get_riccati_B(_B);}
     void get_u_k (hrp::dvector& _u_k) { return preview_controller.get_u_k(_u_k);}
-    void add_x_k_e(const Eigen::Matrix<double, 4,2>& _x_k_e){ preview_controller.add_x_k_e(_x_k_e); };
+    void get_x_k(Eigen::Matrix<double, 3,2>& _x_k){ preview_controller.get_x_k(_x_k); };
+    void set_x_k(Eigen::Matrix<double, 3,2>& _x_k){ preview_controller.set_x_k(_x_k); };
     void get_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){ preview_controller.get_x_k_e(_x_k_e); };
+    void set_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){ preview_controller.set_x_k_e(_x_k_e); };
   };
 }
 #endif /*PREVIEW_H_*/
