@@ -123,16 +123,6 @@ namespace rats
     {
       _p = p;
     };
-    void get_u_k (hrp::dvector& _u_k)
-    {
-      _u_k.resize(u_k.cols());
-      _u_k = u_k;
-    };
-    void get_riccati_A (hrp::dmatrix& _A)
-    {
-      _A.resize(riccati.A.rows(),riccati.A.cols());
-      _A = riccati.A;
-    };
     void get_riccati_B (hrp::dvector& _B)
     {
       _B.resize(riccati.b.rows());
@@ -204,9 +194,9 @@ namespace rats
     };
     void modify_preview_queue(const hrp::dmatrix p_comp)
     {
-      for (size_t i = 0; i < p.size(); i++) {
-        p[i](0) += p_comp(i,0);
-        p[i](1) += p_comp(i,1);
+      for (size_t i = 0; i < p.size()-1; i++) {
+        p[i+1](0) += p_comp(i,0);
+        p[i+1](1) += p_comp(i,1);
       }
     };
     void set_all_queue(const std::deque<Eigen::Matrix<double, 2, 1> >& _p)
@@ -347,7 +337,7 @@ namespace rats
       }
       return flg;
     };
-    bool reupdate(hrp::Vector3& p_ret, hrp::Vector3& x_ret, std::vector<hrp::Vector3>& qdata_ret, const bool updatep)
+    bool reupdate(hrp::Vector3& p_ret, hrp::Vector3& x_ret, const bool updatep)
     {
       bool flg;
       if (updatep) {
@@ -355,13 +345,12 @@ namespace rats
         flg = preview_controller.is_doing();
       } else {
         if ( !preview_controller.is_end() )
-          preview_controller.update_x_k();
+            preview_controller.update_x_k();
         flg = !preview_controller.is_end();
       }
       if (flg) {
         preview_controller.get_current_refzmp(p_ret.data());
         preview_controller.get_refcog(x_ret.data());
-        preview_controller.get_current_qdata(qdata_ret);
       }
       return flg;
     };
@@ -396,9 +385,7 @@ namespace rats
     void get_all_queue (std::deque<Eigen::Matrix<double, 2, 1> >& _p) { return preview_controller.get_all_queue(_p);}
     void get_gain_f (hrp::dvector& _f) { return preview_controller.get_gain_f(_f);}
     void get_gain_K (hrp::dvector& _K) { return preview_controller.get_gain_K(_K);}
-    void get_riccati_A (hrp::dmatrix& _A) { return preview_controller.get_riccati_A(_A);}
     void get_riccati_B (hrp::dvector& _B) { return preview_controller.get_riccati_B(_B);}
-    void get_u_k (hrp::dvector& _u_k) { return preview_controller.get_u_k(_u_k);}
     void get_x_k(Eigen::Matrix<double, 3,2>& _x_k){ preview_controller.get_x_k(_x_k); };
     void set_x_k(Eigen::Matrix<double, 3,2>& _x_k){ preview_controller.set_x_k(_x_k); };
     void get_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){ preview_controller.get_x_k_e(_x_k_e); };
