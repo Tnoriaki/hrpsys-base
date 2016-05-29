@@ -216,7 +216,8 @@ namespace rats
       toe_heel_phase_counter* thp_ptr;
       bool use_toe_heel_transition;
       boost::shared_ptr<interpolator> zmp_weight_interpolator;
-      void calc_current_refzmp (hrp::Vector3& ret, std::vector<hrp::Vector3>& swing_foot_zmp_offsets, const double default_double_support_ratio_before, const double default_double_support_ratio_after, const double default_double_support_static_ratio_before, const double default_double_support_static_ratio_after);
+      std::vector<size_t> same_footstep_index_list;
+      void calc_current_refzmp (hrp::Vector3& ret, std::vector<hrp::Vector3>& swing_foot_zmp_offsets, const double default_double_support_ratio_before, const double default_double_support_ratio_after, const double default_double_support_static_ratio_before, const double default_double_support_static_ratio_after, const hrp::Vector3 take_off_vel);
       const bool is_start_double_support_phase () const { return refzmp_index == 0; };
       const bool is_second_phase () const { return refzmp_index == 1; };
       const bool is_second_last_phase () const { return refzmp_index == refzmp_cur_list.size()-2; };
@@ -228,7 +229,7 @@ namespace rats
         : refzmp_cur_list(), foot_x_axises_list(), swing_leg_types_list(), step_count_list(), default_zmp_offsets(),
           refzmp_index(0), refzmp_count(0), one_step_count(0),
           toe_zmp_offset_x(0), heel_zmp_offset_x(0), dt(_dt),
-          thp_ptr(_thp_ptr), use_toe_heel_transition(false)
+          thp_ptr(_thp_ptr), use_toe_heel_transition(false), same_footstep_index_list()
       {
           default_zmp_offsets.push_back(hrp::Vector3::Zero());
           default_zmp_offsets.push_back(hrp::Vector3::Zero());
@@ -260,12 +261,16 @@ namespace rats
         foot_x_axises_list.clear();
         swing_leg_types_list.clear();
         step_count_list.clear();
+        // same_footstep_index_list.clear();
       };
       void push_refzmp_from_footstep_nodes_for_dual (const std::vector<step_node>& fns,
                                                      const std::vector<step_node>& _support_leg_steps,
                                                      const std::vector<step_node>& _swing_leg_steps);
-        void push_refzmp_from_footstep_nodes_for_single (const std::vector<step_node>& fns, const std::vector<step_node>& _support_leg_stepsconst);
+      void push_refzmp_from_footstep_nodes_for_single (const std::vector<step_node>& fns, const std::vector<step_node>& _support_leg_stepsconst);
       void update_refzmp (const std::vector< std::vector<step_node> >& fnsl);
+      void push_same_footstep_index (const size_t _same_footstep_index){
+        same_footstep_index_list.push_back(_same_footstep_index);
+      }
       // setter
       void set_indices (const size_t idx) { refzmp_index = idx; };
       void set_refzmp_count(const size_t _refzmp_count) { refzmp_count = _refzmp_count; };
@@ -285,9 +290,9 @@ namespace rats
           }
       };
       // getter
-      bool get_current_refzmp (hrp::Vector3& rzmp, std::vector<hrp::Vector3>& swing_foot_zmp_offsets, const double default_double_support_ratio_before, const double default_double_support_ratio_after, const double default_double_support_static_ratio_before, const double default_double_support_static_ratio_after)
+      bool get_current_refzmp (hrp::Vector3& rzmp, std::vector<hrp::Vector3>& swing_foot_zmp_offsets, const double default_double_support_ratio_before, const double default_double_support_ratio_after, const double default_double_support_static_ratio_before, const double default_double_support_static_ratio_after, const hrp::Vector3 take_off_vel)
       {
-        if (refzmp_cur_list.size() > refzmp_index ) calc_current_refzmp(rzmp, swing_foot_zmp_offsets, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after);
+        if (refzmp_cur_list.size() > refzmp_index ) calc_current_refzmp(rzmp, swing_foot_zmp_offsets, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after, take_off_vel);
         return refzmp_cur_list.size() > refzmp_index;
       };
       const hrp::Vector3& get_refzmp_cur () const { return refzmp_cur_list.front(); };
@@ -305,10 +310,12 @@ namespace rats
       };
     };
 
+
     class delay_hoffarbib_trajectory_generator
     {
     private:
       hrp::Vector3 pos, vel, acc; // [m], [m/s], [m/s^2]
+      hrp::Vector3 skate_acc;
       double dt; // [s]
       // Implement hoffarbib to configure remain_time;
       void hoffarbib_interpolation (const double tmp_remain_time, const hrp::Vector3& tmp_goal, const hrp::Vector3 tmp_goal_vel = hrp::Vector3::Zero(), const hrp::Vector3 tmp_goal_acc = hrp::Vector3::Zero())
@@ -320,17 +327,43 @@ namespace rats
         vel = vel + dt * acc;
         pos = pos + dt * vel;
       };
+      void hoffarbib_interpolation_all (const double tmp_remain_time, const hrp::Vector3& tmp_goal, const hrp::Vector3& tmp_goal_vel, const hrp::Vector3& tmp_goal_acc)
+      {
+        hrp::Vector3 jerk = (-9.0/ tmp_remain_time) * (acc - tmp_goal_acc / 3.0) +
+          (-36.0 / (tmp_remain_time * tmp_remain_time)) * (tmp_goal_vel * 2.0 / 3.0 + vel) +
+          (60.0 / (tmp_remain_time * tmp_remain_time * tmp_remain_time)) * (tmp_goal - pos);
+        acc = acc + dt * jerk;
+        vel = vel + dt * acc;
+        pos = pos + dt * vel;
+      };
+      void hoffarbib_interpolation_acc (const double t, const double T, const hrp::Vector3& goal_pos, const hrp::Vector3& goal_vel, const hrp::Vector3& goal_acc, const hrp::Vector3& start_pos, const hrp::Vector3& start_vel, const hrp::Vector3& start_acc)
+      {
+        if (T > 0){
+          acc = 6.0 * (t/T) * (0.5 * goal_acc  - 1.5 * start_acc - 4.0 * goal_vel / T - 6.0 * start_vel / T + 10.0 * goal_pos / (T*T) - 10.0 * start_pos / (T*T))
+            + 12.0 * (t/T) * (t/T) * (-  goal_acc  - 1.5 * start_acc + 7.0 * goal_vel / T + 8.0 * start_vel / T - 15.0 * goal_pos / (T*T) + 15.0 * start_pos / (T*T))
+            + 20.0 * (t/T) * (t/T) * (t/T) * (0.5 * goal_acc - 0.5 * start_acc - 3.0 * goal_vel / T - 3.0 * start_vel / T + 6.0 * goal_pos / (T*T) - 6.0 * start_pos / (T*T))
+            + start_acc;
+          if (t == 0) vel = start_vel;
+          vel = vel + dt * acc;
+          if (t == 0) pos = start_pos;
+          pos = pos + dt * vel;
+        }
+      }
     protected:
       double time_offset; // [s]
       double final_distance_weight;
       size_t one_step_count, current_count, double_support_count_before, double_support_count_after; // time/dt
+      hrp::Vector3 take_off_vel; // [m/s^2]
+      hrp::Vector3 landing_vel; // [m/s^2]
       virtual hrp::Vector3 interpolate_antecedent_path (const hrp::Vector3& start, const hrp::Vector3& goal, const double height, const double tmp_ratio) = 0;
     public:
-      delay_hoffarbib_trajectory_generator () : time_offset(0.35), final_distance_weight(1.0), one_step_count(0), current_count(0), double_support_count_before(0), double_support_count_after(0) {};
+      delay_hoffarbib_trajectory_generator () : time_offset(0.35), final_distance_weight(1.0), one_step_count(0), current_count(0), double_support_count_before(0), double_support_count_after(0), take_off_vel(hrp::Vector3(-0.3,0,0)), landing_vel(hrp::Vector3(0.0,0,0)) {};
       ~delay_hoffarbib_trajectory_generator() { };
       void set_dt (const double _dt) { dt = _dt; };
       void set_swing_trajectory_delay_time_offset (const double _time_offset) { time_offset = _time_offset; };
       void set_swing_trajectory_final_distance_weight (const double _final_distance_weight) { final_distance_weight = _final_distance_weight; };
+      void set_swing_leg_take_off_vel(const hrp::Vector3 _take_off_vel) { take_off_vel = _take_off_vel; };
+      void set_swing_leg_landing_vel(const hrp::Vector3 _landing_vel) { landing_vel = _landing_vel; };
       void reset (const size_t _one_step_len, const double default_double_support_ratio_before, const double default_double_support_ratio_after)
       {
         one_step_count = _one_step_len;
@@ -371,8 +404,64 @@ namespace rats
         ret = pos;
         current_count++;
       };
+      void get_trajectory_point_for_skate (hrp::Vector3& ret, const hrp::Vector3& start, const hrp::Vector3& goal, const double height, const bool use_start_vel, const bool use_goal_vel)
+      {
+        /// tmp
+        landing_vel = hrp::Vector3::Zero();
+        /* landing_vel = hrp::Vector3(-0.1,0,0); */
+        /// set paramter
+        double dist_ratio = 0.4;
+        hrp::Vector3 take_off_dist = take_off_vel * double_support_count_before * dt * dist_ratio;
+        hrp::Vector3 landing_dist = - landing_vel * double_support_count_after * dt * dist_ratio;
+        hrp::Vector3 start_acc = hrp::Vector3::Zero();
+        hrp::Vector3 start_vel = hrp::Vector3::Zero();
+        hrp::Vector3 goal_acc = hrp::Vector3::Zero();
+        hrp::Vector3 goal_vel = hrp::Vector3::Zero();
+        double double_support_count_before_for_skate = double_support_count_before;
+        double double_support_count_after_for_skate = double_support_count_after;
+        if ( use_start_vel ) double_support_count_before_for_skate *= 0.5;
+        if ( use_goal_vel ) {
+            double_support_count_after_for_skate *= 0.5;
+            goal_acc = 1.5 * (take_off_vel - landing_vel) / (double_support_count_after * dt);
+            goal_vel = ((30*dist_ratio-7)*take_off_vel + 7.0 * landing_vel) / 16.0;
+            landing_dist -= ( (16.0*dist_ratio-5.0) * take_off_vel + 5.0 * landing_vel ) * double_support_count_after * dt /32.0;
+        }
+        /// update
+        if ( current_count <= double_support_count_before_for_skate ) { // first double support phase
+          double time = current_count * dt;
+          double T_acc = double_support_count_before * dt;
+          if ( use_start_vel ) time = (current_count + double_support_count_before_for_skate) * dt;
+          /* hoffarbib_interpolation_all (remain_time, start + take_off_dist, take_off_vel, hrp::Vector3::Zero()); */
+          hoffarbib_interpolation_acc (time, T_acc, start+take_off_dist, take_off_vel, hrp::Vector3::Zero(), start, start_vel, start_acc);
+          skate_acc = acc;
+        } else if ( current_count >= one_step_count - double_support_count_after_for_skate ) { // last double support phase
+          double time = (current_count - ( one_step_count - double_support_count_after_for_skate)) * dt ;
+          double T_acc = double_support_count_after_for_skate * dt;
+          /* hoffarbib_interpolation_all((one_step_count - double_support_count_after_for_skate) * dt, goal, goal_vel, goal_acc); */
+          hoffarbib_interpolation_acc (time, T_acc, goal, goal_vel, goal_acc, goal + landing_dist, landing_vel, hrp::Vector3::Zero());
+          skate_acc = acc;
+        } else if ( double_support_count_before_for_skate <= current_count && current_count < one_step_count - double_support_count_after_for_skate ) { // swing phase
+          size_t swing_remain_count = one_step_count - current_count - double_support_count_after_for_skate;
+          size_t swing_one_step_count = one_step_count - double_support_count_before_for_skate - double_support_count_after_for_skate;
+          if (swing_remain_count*dt > time_offset) { // antecedent path is still interpolating
+            hoffarbib_interpolation_all (time_offset, interpolate_antecedent_path(start + take_off_dist, goal + landing_dist, height, ((swing_one_step_count - swing_remain_count) / (swing_one_step_count - time_offset/dt))), landing_vel, hrp::Vector3::Zero());
+            skate_acc = hrp::Vector3::Zero();
+          } else if (swing_remain_count > 0) { // antecedent path already reached to goal
+            hoffarbib_interpolation_all (swing_remain_count*dt, goal + landing_dist, landing_vel, hrp::Vector3::Zero());
+            skate_acc = hrp::Vector3::Zero();
+          } else { // swing_remain_count = 0
+            pos += vel * dt;
+            skate_acc = hrp::Vector3::Zero();
+          }
+        }
+        ret = pos;
+        current_count++;
+      };
       double get_swing_trajectory_delay_time_offset () const { return time_offset; };
       double get_swing_trajectory_final_distance_weight () const { return final_distance_weight; };
+      hrp::Vector3 get_swing_leg_take_off_vel () const { return take_off_vel; };
+      hrp::Vector3 get_swing_leg_landing_vel () const { return landing_vel; };
+      hrp::Vector3 get_skate_acc () const { return skate_acc; };
       // interpolate path vector
       //   tmp_ratio : ratio value [0, 1]
       //   org_point_vec : vector of via points
@@ -498,7 +587,7 @@ namespace rats
       hrp::Matrix33 start_rot;
       hrp::Vector3 kick_point_offset;
     public:
-        cycloid_delay_kick_hoffarbib_trajectory_generator() : delay_hoffarbib_trajectory_generator(), kick_point_offset(hrp::Vector3(-0.1, 0.0, 0.0)) {};
+      cycloid_delay_kick_hoffarbib_trajectory_generator() : delay_hoffarbib_trajectory_generator(), kick_point_offset(hrp::Vector3(-0.01, 0.0, 0.03)) {};
       void set_cycloid_delay_kick_point_offset (const hrp::Vector3 _offset) { kick_point_offset = _offset; };
       void set_start_rot (const hrp::Matrix33 _offset) { start_rot = _offset; };
       hrp::Vector3 get_cycloid_delay_kick_point_offset () const { return kick_point_offset; };
@@ -509,8 +598,7 @@ namespace rats
         double ratio = 0.4;
         via_goal(2) += ratio*height;
         double tmpheight = ((start(2)+goal(2))/2.0+height-(start(2)+via_goal(2))/2.0);
-        // kick_point_offset = start_rot * kick_point_offset;
-        cycloid_path.push_back(start);
+        /* cycloid_path.push_back(start); */
         if(height > 1e-4){
             cycloid_path.push_back(start + start_rot * kick_point_offset);
             cycloid_midpoint(tmpv, 0.2, start + start_rot * kick_point_offset, via_goal, tmpheight);
@@ -527,7 +615,7 @@ namespace rats
         return interpolate_antecedent_path_base(tmp_ratio, cycloid_path);
       };
     };
-    
+
     class cross_delay_hoffarbib_trajectory_generator : public delay_hoffarbib_trajectory_generator
     {
     private:
@@ -594,7 +682,7 @@ namespace rats
       interpolator* toe_heel_interpolator;
       double toe_pos_offset_x, heel_pos_offset_x, toe_angle, heel_angle, foot_dif_rot_angle;
       bool use_toe_joint;
-      void calc_current_swing_leg_steps (std::vector<step_node>& rets, const double step_height, const double _current_toe_angle, const double _current_heel_angle);
+      void calc_current_swing_leg_steps (std::vector<step_node>& rets, const double step_height, const double _current_toe_angle, const double _current_heel_angle, const double footstep_num);
       double calc_interpolated_toe_heel_angle (const toe_heel_phase start_phase, const toe_heel_phase goal_phase, const double start, const double goal);
       void modif_foot_coords_for_toe_heel_phase (coordinates& org_coords, const double _current_toe_angle, const double _current_heel_angle);
       void cycloid_midcoords (coordinates& ret, const coordinates& start,
@@ -606,7 +694,7 @@ namespace rats
       void cycloid_delay_midcoords (coordinates& ret, const coordinates& start,
                                     const coordinates& goal, const double height, const size_t swing_trajectory_generator_idx);
       void cycloid_delay_kick_midcoords (coordinates& ret, const coordinates& start,
-                                    const coordinates& goal, const double height);
+                                         const coordinates& goal, const double height, const double footstep_num);
       void cross_delay_midcoords (coordinates& ret, const coordinates& start,
                                   const coordinates& goal, const double height, leg_type lr);
       void calc_ratio_from_double_support_ratio (const double default_double_support_ratio_before, const double default_double_support_ratio_after);
@@ -671,6 +759,8 @@ namespace rats
         crdtg.set_swing_trajectory_final_distance_weight(_final_distance_weight);
         final_distance_weight = _final_distance_weight;
       };
+      void set_swing_leg_take_off_vel (const hrp::Vector3 _take_off_vel) { cdktg.set_swing_leg_take_off_vel(_take_off_vel); };
+      void set_swing_leg_landing_vel (const hrp::Vector3 _landing_vel) { cdktg.set_swing_leg_landing_vel(_landing_vel); };
       void set_stair_trajectory_way_point_offset (const hrp::Vector3 _offset) { sdtg.set_stair_trajectory_way_point_offset(_offset); };
       void set_cycloid_delay_kick_point_offset (const hrp::Vector3 _offset) { cdktg.set_cycloid_delay_kick_point_offset(_offset); };
       void set_toe_pos_offset_x (const double _offx) { toe_pos_offset_x = _offx; };
@@ -784,6 +874,7 @@ namespace rats
       void update_leg_steps (const std::vector< std::vector<step_node> >& fnsl, const double default_double_support_ratio_before, const double default_double_support_ratio_after);
       size_t get_footstep_index() const { return footstep_index; };
       size_t get_lcg_count() const { return lcg_count; };
+      size_t get_one_step_count() const { return one_step_count; };
       double get_current_swing_time(const size_t idx) const { return current_swing_time.at(idx); };
       const std::vector<step_node>& get_swing_leg_steps() const { return swing_leg_steps; };
       const std::vector<step_node>& get_support_leg_steps() const { return support_leg_steps; };
@@ -828,6 +919,9 @@ namespace rats
       double get_swing_trajectory_final_distance_weight () const { return final_distance_weight; };
       hrp::Vector3 get_stair_trajectory_way_point_offset () const { return sdtg.get_stair_trajectory_way_point_offset(); };
       hrp::Vector3 get_cycloid_delay_kick_point_offset () const { return cdktg.get_cycloid_delay_kick_point_offset() ; };
+      hrp::Vector3 get_swing_leg_take_off_vel () const { return cdktg.get_swing_leg_take_off_vel() ; };
+      hrp::Vector3 get_swing_leg_landing_vel () const { return cdktg.get_swing_leg_landing_vel() ; };
+      hrp::Vector3 get_skate_acc () const { return cdktg.get_skate_acc() ; };
       double get_toe_pos_offset_x () const { return toe_pos_offset_x; };
       double get_heel_pos_offset_x () const { return heel_pos_offset_x; };
       double get_toe_angle () const { return toe_angle; };
@@ -1045,6 +1139,8 @@ namespace rats
     void set_default_orbit_type (const orbit_type type) { lcg.set_default_orbit_type(type); };
     void set_swing_trajectory_delay_time_offset (const double _time_offset) { lcg.set_swing_trajectory_delay_time_offset(_time_offset); };
     void set_swing_trajectory_final_distance_weight (const double _final_distance_weight) { lcg.set_swing_trajectory_final_distance_weight(_final_distance_weight); };
+    void set_swing_leg_take_off_vel (const hrp::Vector3 _take_off_vel) { lcg.set_swing_leg_take_off_vel(_take_off_vel); };
+    void set_swing_leg_landing_vel (const hrp::Vector3 _landing_vel) { lcg.set_swing_leg_landing_vel(_landing_vel); };
     void set_stair_trajectory_way_point_offset (const hrp::Vector3 _offset) { lcg.set_stair_trajectory_way_point_offset(_offset); };
     void set_cycloid_delay_kick_point_offset (const hrp::Vector3 _offset) { lcg.set_cycloid_delay_kick_point_offset(_offset); };
     void set_gravitational_acceleration (const double ga) { gravitational_acceleration = ga; };
@@ -1119,7 +1215,15 @@ namespace rats
       preview_controller_ptr->get_refcog_acc(refcog_acc);
       return hrp::Vector3(refcog_acc[0], refcog_acc[1], refcog_acc[2]);
     };
-    const hrp::Vector3& get_refzmp () const { return refzmp;};
+    const hrp::Vector3& get_refzmp () {
+      //for skate
+      /* hrp::Vector3 modif_refzmp = refzmp; */
+      /* modif_refzmp(0) += lcg.get_skate_acc()(0) * cog(2) / gravitational_acceleration; */
+        if(lcg.get_default_orbit_type() == CYCLOIDDELAYKICK && lcg.get_skate_acc()(0) != 0){
+            refzmp(0) = cog(0) + lcg.get_skate_acc()(0) * cog(2) / gravitational_acceleration;
+        }
+      return refzmp;
+    };
     hrp::Vector3 get_cart_zmp () const
     {
         double czmp[3];
@@ -1182,6 +1286,7 @@ namespace rats
     };
     size_t get_footstep_index() const { return lcg.get_footstep_index(); };
     size_t get_lcg_count() const { return lcg.get_lcg_count(); };
+    size_t get_one_step_count() const { return lcg.get_one_step_count(); };
     double get_current_swing_time(const size_t idx) const { return lcg.get_current_swing_time(idx); };
     std::vector<leg_type> get_current_support_states() const { return lcg.get_current_support_states();};
     double get_default_step_time () const { return default_step_time; };
@@ -1207,6 +1312,9 @@ namespace rats
     double get_swing_trajectory_final_distance_weight () const { return lcg.get_swing_trajectory_final_distance_weight(); };
     hrp::Vector3 get_stair_trajectory_way_point_offset () const { return lcg.get_stair_trajectory_way_point_offset(); };
     hrp::Vector3 get_cycloid_delay_kick_point_offset () const { return lcg.get_cycloid_delay_kick_point_offset(); };
+    hrp::Vector3 get_swing_leg_take_off_vel() const {return lcg.get_swing_leg_take_off_vel(); };
+    hrp::Vector3 get_swing_leg_landing_vel() const {return lcg.get_swing_leg_landing_vel(); };
+    hrp::Vector3 get_skate_acc() const { return lcg.get_skate_acc();};
     double get_gravitational_acceleration () const { return gravitational_acceleration; } ;
     double get_toe_pos_offset_x () const { return lcg.get_toe_pos_offset_x(); };
     double get_heel_pos_offset_x () const { return lcg.get_heel_pos_offset_x(); };
@@ -1258,6 +1366,10 @@ namespace rats
         std::cerr << "[" << print_str << "]   stair_trajectory_way_point_offset = " << tmpv.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[m]" << std::endl;
         tmpv = get_cycloid_delay_kick_point_offset();
         std::cerr << "[" << print_str << "]   cycloid_delay_kick_point_offset = " << tmpv.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[m]" << std::endl;
+        tmpv = get_swing_leg_take_off_vel();
+        std::cerr << "[" << print_str << "]   swing_leg_take_off_vel = " << tmpv.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[m]" << std::endl;
+        tmpv = get_swing_leg_landing_vel();
+        std::cerr << "[" << print_str << "]   swing_leg_landing_vel = " << tmpv.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << "[m]" << std::endl;
         std::cerr << "[" << print_str << "]   gravitational_acceleration = " << get_gravitational_acceleration() << "[m/s^2]" << std::endl;
         std::cerr << "[" << print_str << "]   toe_pos_offset_x = " << get_toe_pos_offset_x() << "[mm], heel_pos_offset_x = " << get_heel_pos_offset_x() << "[mm]" << std::endl;
         std::cerr << "[" << print_str << "]   toe_zmp_offset_x = " << get_toe_zmp_offset_x() << "[mm], heel_zmp_offset_x = " << get_heel_zmp_offset_x() << "[mm]" << std::endl;
