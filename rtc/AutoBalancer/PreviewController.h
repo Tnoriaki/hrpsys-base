@@ -59,6 +59,7 @@ namespace rats
     Eigen::Matrix<double, 1, 2> u_k;
     hrp::dvector f;
     std::deque<Eigen::Matrix<double, 2, 1> > p;
+    std::deque<Eigen::Matrix<double, 2, 1> > p_before;
     std::deque<double> pz;
     std::deque< std::vector<hrp::Vector3> > qdata;
     double zmp_z, cog_z;
@@ -82,7 +83,7 @@ namespace rats
     /* dt = [s], zc = [mm], d = [s] */
     preview_control_base(const double dt, const double zc,
                          const hrp::Vector3& init_xk, const double _gravitational_acceleration, const double d = 1.6)
-      : riccati(), x_k(Eigen::Matrix<double, 3, 2>::Zero()), u_k(Eigen::Matrix<double, 1, 2>::Zero()), p(), pz(), qdata(),
+      : riccati(), x_k(Eigen::Matrix<double, 3, 2>::Zero()), u_k(Eigen::Matrix<double, 1, 2>::Zero()), p(), p_before(), pz(), qdata(),
         zmp_z(0), cog_z(zc), delay(static_cast<size_t>(round(d / dt))), ending_count(1+delay)
     {
       tcA << 1, dt, 0.5 * dt * dt,
@@ -98,6 +99,7 @@ namespace rats
     virtual ~preview_control_base()
     {
       p.clear();
+      p_before.clear();
       pz.clear();
       qdata.clear();
     };
@@ -112,7 +114,30 @@ namespace rats
       ending_count--;
     };
     // void update_zc(double zc);
+    void get_x_k (Eigen::Matrix<double, 3, 2>& _x_k){ _x_k = x_k; };
+    void set_x_k (Eigen::Matrix<double, 3, 2>& _x_k){ x_k = _x_k; };
+    virtual void get_x_k_e (Eigen::Matrix<double, 4, 2>& _x_k_e){};
+    virtual void set_x_k_e (Eigen::Matrix<double, 4, 2>& _x_k_e){};
     size_t get_delay () { return delay; };
+    void get_all_queue ( std::deque<Eigen::Matrix<double, 2, 1> >& _p)
+    {
+      _p = p;
+    };
+    void get_riccati_B (hrp::dvector& _B)
+    {
+      _B.resize(riccati.b.rows());
+      _B = riccati.b;
+    };
+    void get_gain_K (hrp::dvector& _K)
+    {
+      _K.resize(riccati.K.cols());
+      _K = riccati.K;
+    };
+    void get_gain_f (hrp::dvector& _f)
+    {
+      _f.resize(delay+1);
+      _f = f;
+    };
     void get_refcog (double* ret)
     {
       ret[0] = x_k(0,0);
@@ -155,6 +180,7 @@ namespace rats
       size_t num = p.size() - remain_length;
       for (size_t i = 0; i < num; i++) {
         p.pop_back();
+        p_before.back();
         pz.pop_back();
         qdata.pop_back();
       }
@@ -162,8 +188,20 @@ namespace rats
     void remove_preview_queue() // Remove all queue
     {
         p.clear();
+        p_before.clear();
         pz.clear();
         qdata.clear();
+    };
+    void modify_preview_queue(const hrp::dmatrix p_comp)
+    {
+      for (size_t i = 0; i < p.size()-1; i++) {
+        p[i+1](0) += p_comp(i,0);
+        p[i+1](1) += p_comp(i,1);
+      }
+    };
+    void set_all_queue(const std::deque<Eigen::Matrix<double, 2, 1> >& _p)
+    {
+      p = _p;
     };
     void print_all_queue ()
     {
@@ -190,6 +228,8 @@ namespace rats
       init_riccati(tcA, tcb, tcc, q, r);
     };
     virtual ~preview_control() {};
+    void get_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){};
+    void set_x_k_e(const Eigen::Matrix<double, 4,2>& _x_k_e){};
   };
 
   class extended_preview_control : public preview_control_base<4>
@@ -198,7 +238,7 @@ namespace rats
     Eigen::Matrix<double, 4, 2> x_k_e;
     void calc_f();
     void calc_u();
-    void calc_x_k();
+    // void calc_x_k();
   public:
     extended_preview_control(const double dt, const double zc,
                              const hrp::Vector3& init_xk, const double _gravitational_acceleration = DEFAULT_GRAVITATIONAL_ACCELERATION, const double q = 1.0,
@@ -224,6 +264,48 @@ namespace rats
       init_riccati(A, b, c, q, r);
     };
     virtual ~extended_preview_control() {};
+    void calc_x_k();
+    void set_x_k_e(const Eigen::Matrix<double, 4,2>& _x_k_e){
+        x_k_e = _x_k_e;
+        // for (size_t i = 0; i < 3; i++)
+        //     for (size_t j = 0; j < 2; j++)
+        //         x_k(i,j) += _x_k_e(i+1,j);
+    };
+    void get_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){_x_k_e = x_k_e;};
+  };
+
+  class preview_control_for_error : public preview_control_base<4>
+  {
+  private:
+    Eigen::Matrix<double, 4, 2> x_k_e;
+    void calc_f();
+    void calc_u();
+    void calc_x_k();
+  public:
+    preview_control_for_error(const double dt, const double zc,
+                             const hrp::Vector3& init_xk, const double _gravitational_acceleration = DEFAULT_GRAVITATIONAL_ACCELERATION, const double q = 1.0,
+                             const double r = 1.0e-6, const double d = 1.6)
+      : preview_control_base<4>(dt, zc, init_xk, _gravitational_acceleration, d), x_k_e(Eigen::Matrix<double, 4, 2>::Zero())
+    {
+      Eigen::Matrix<double, 4, 4> A;
+      Eigen::Matrix<double, 4, 1> b;
+      Eigen::Matrix<double, 1, 4> c;
+      Eigen::Matrix<double, 1, 3> tmpca(tcc * tcA);
+      Eigen::Matrix<double, 1, 1> tmpcb(tcc * tcb);
+      A << 1.0, -tmpca(0,0), -tmpca(0,1), -tmpca(0,2),
+        0.0, tcA(0,0), tcA(0,1), tcA(0,2),
+        0.0, tcA(1,0), tcA(1,1), tcA(1,2),
+        0.0, tcA(2,0), tcA(2,1), tcA(2,2);
+      b << -tmpcb(0,0),
+        tcb(0,0),
+        tcb(1,0),
+        tcb(2,0);
+      c << 1,0,0,0;
+      // x_k_e(0,0) = init_xk(0);
+      // x_k_e(0,1) = init_xk(1);
+      init_riccati(A, b, c, q, r);
+    };
+    virtual ~preview_control_for_error() {};
   };
 
   template <class previw_T>
@@ -255,6 +337,23 @@ namespace rats
       }
       return flg;
     };
+    bool reupdate(hrp::Vector3& p_ret, hrp::Vector3& x_ret, const bool updatep)
+    {
+      bool flg;
+      if (updatep) {
+        preview_controller.calc_x_k();
+        flg = preview_controller.is_doing();
+      } else {
+        if ( !preview_controller.is_end() )
+            preview_controller.update_x_k();
+        flg = !preview_controller.is_end();
+      }
+      if (flg) {
+        preview_controller.get_current_refzmp(p_ret.data());
+        preview_controller.get_refcog(x_ret.data());
+      }
+      return flg;
+    };
     void remove_preview_queue(const size_t remain_length)
     {
       preview_controller.remove_preview_queue(remain_length);
@@ -263,17 +362,34 @@ namespace rats
     {
       preview_controller.remove_preview_queue();
     };
+    void modify_preview_queue(const hrp::dmatrix& p_comp)
+    {
+      preview_controller.modify_preview_queue(p_comp);
+    };
+    void set_all_queue(const std::deque<Eigen::Matrix<double, 2, 1> >& p)
+    {
+      preview_controller.set_all_queue(p);
+    };
     void print_all_queue ()
     {
       preview_controller.print_all_queue();
     }
 
     void get_cart_zmp (double* ret) { preview_controller.get_cart_zmp(ret);}
+    void get_refcog (double* ret) { preview_controller.get_refcog(ret);}
     void get_refcog_vel (double* ret) { preview_controller.get_refcog_vel(ret);}
     void get_refcog_acc (double* ret) { preview_controller.get_refcog_acc(ret);}
     void get_current_refzmp (double* ret) { preview_controller.get_current_refzmp(ret);}
     //void get_current_qdata (double* ret) { preview_controller.get_current_qdata(ret);}
     size_t get_delay () { return preview_controller.get_delay(); };
+    void get_all_queue (std::deque<Eigen::Matrix<double, 2, 1> >& _p) { return preview_controller.get_all_queue(_p);}
+    void get_gain_f (hrp::dvector& _f) { return preview_controller.get_gain_f(_f);}
+    void get_gain_K (hrp::dvector& _K) { return preview_controller.get_gain_K(_K);}
+    void get_riccati_B (hrp::dvector& _B) { return preview_controller.get_riccati_B(_B);}
+    void get_x_k(Eigen::Matrix<double, 3,2>& _x_k){ preview_controller.get_x_k(_x_k); };
+    void set_x_k(Eigen::Matrix<double, 3,2>& _x_k){ preview_controller.set_x_k(_x_k); };
+    void get_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){ preview_controller.get_x_k_e(_x_k_e); };
+    void set_x_k_e(Eigen::Matrix<double, 4,2>& _x_k_e){ preview_controller.set_x_k_e(_x_k_e); };
   };
 }
 #endif /*PREVIEW_H_*/

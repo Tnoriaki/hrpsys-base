@@ -43,11 +43,16 @@ int main(int argc, char* argv[])
     ref_zmp_list.push(v);
   }
 
-  //preview_dynamics_filter<preview_control> df(dt, 0.8, ref_zmp_list.front());
-  preview_dynamics_filter<extended_preview_control> df(dt, 0.8, ref_zmp_list.front());
+  // preview_dynamics_filter<preview_control> df(dt, 0.8, ref_zmp_list.front());
+  // preview_dynamics_filter<extended_preview_control> df(dt, 0.8, ref_zmp_list.front());
+  preview_dynamics_filter<preview_control_for_error> df(dt, 0.8, ref_zmp_list.front());
   std::string fname("/tmp/plot.dat");
-  FILE* fp = fopen(fname.c_str(), "w");  
+  std::string fname_("/tmp/fgain.dat");
+  FILE* fp = fopen(fname.c_str(), "w");
+  FILE* fp_ = fopen(fname_.c_str(), "w");
   double cart_zmp[3], refzmp[3];
+  hrp::dvector f;
+  hrp::dvector K;
   bool r = true;
   size_t index = 0;
   while (r) {
@@ -71,6 +76,16 @@ int main(int argc, char* argv[])
     if (!ref_zmp_list.empty()) ref_zmp_list.pop();
   }
   fclose(fp);
+  df.get_gain_f(f);
+  df.get_gain_K(K);
+  for (size_t i = 0; i < f.size(); i++){
+      fprintf(fp_, "%f\n", f[i]);
+  }
+  fprintf(fp_, "-----\n");
+  for (size_t i = 0; i < K.size(); i++){
+      fprintf(fp_, "%f\n", K[i]);
+  }
+  fclose(fp_);
   if (use_gnuplot) {
   FILE* gp[3];
   std::string titles[2] = {"X", "Y"};

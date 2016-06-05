@@ -384,6 +384,7 @@ public:
         std::cerr << "test0 : Set foot steps" << std::endl;
         /* initialize sample footstep_list */
         parse_params();
+        gg->set_use_zmp_feedback_walk(true);
         std::vector< std::vector<step_node> > fnsl;
         fnsl.push_back(boost::assign::list_of(step_node("rleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[0])), gg->get_default_step_height(), gg->get_default_step_time(), gg->get_toe_angle(), gg->get_heel_angle())));
         fnsl.push_back(boost::assign::list_of(step_node("lleg", coordinates(hrp::Vector3(hrp::Vector3(0, 0, 0)+leg_pos[1])), gg->get_default_step_height(), gg->get_default_step_time(), gg->get_toe_angle(), gg->get_heel_angle())));

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import os
 import rtm
@@ -386,6 +387,9 @@ class HrpsysConfigurator:
             connectPorts(self.seq.port("qRef"), self.st.port("qRefSeq"))
             connectPorts(self.abc.port("walkingStates"), self.st.port("walkingStates"))
             connectPorts(self.abc.port("sbpCogOffset"), self.st.port("sbpCogOffset"))
+            connectPorts(self.st.port("zmp"), self.abc.port("actzmp"))
+            connectPorts(self.st.port("cog"), self.abc.port("actcog"))
+            connectPorts(self.st.port("originActCogVel"), self.abc.port("actcogvel"))
             if self.es:
                 connectPorts(self.st.port("emergencySignal"), self.es.port("emergencySignal"))
             connectPorts(self.st.port("emergencySignal"), self.abc.port("emergencySignal"))

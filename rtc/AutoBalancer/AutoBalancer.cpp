@@ -62,6 +62,9 @@ AutoBalancer::AutoBalancer(RTC::Manager* manager)
       m_AutoBalancerServicePort("AutoBalancerService"),
       m_walkingStatesOut("walkingStates", m_walkingStates),
       m_sbpCogOffsetOut("sbpCogOffset", m_sbpCogOffset),
+      m_actzmpIn("actzmp", m_actzmp),
+      m_actcogIn("actcog", m_actcog),
+      m_actcogvelIn("actcogvel", m_actcogvel),
       // </rtc-template>
       gait_type(BIPED),
       move_base_gain(0.8),
@@ -92,6 +95,9 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
     addInPort("zmpIn", m_zmpIn);
     addInPort("optionalData", m_optionalDataIn);
     addInPort("emergencySignal", m_emergencySignalIn);
+    addInPort("actzmp", m_actzmpIn);
+    addInPort("actcog", m_actcogIn);
+    addInPort("actcogvel", m_actcogvelIn);
 
     // Set OutPort buffer
     addOutPort("q", m_qOut);
@@ -444,6 +450,25 @@ RTC::ReturnCode_t AutoBalancer::onExecute(RTC::UniqueId ec_id)
         //     gg->emergency_stop();
         // }
     }
+    if (m_actzmpIn.isNew()){
+        m_actzmpIn.read();
+        act_zmp(0) = m_actzmp.data.x;
+        act_zmp(1) = m_actzmp.data.y;
+        act_zmp(2) = m_actzmp.data.z;
+    }
+    if (m_actcogIn.isNew()){
+        m_actcogIn.read();
+        act_cog(0) = m_actcog.data.x;
+        act_cog(1) = m_actcog.data.y;
+        act_cog(2) = m_actcog.data.z;
+    }
+    if (m_actcogvelIn.isNew()){
+        m_actcogvelIn.read();
+        act_cogvel(0) = m_actcogvel.data.x;
+        act_cogvel(1) = m_actcogvel.data.y;
+        act_cogvel(2) = m_actcogvel.data.z;
+    }
+
 
     Guard guard(m_mutex);
     hrp::Vector3 ref_basePos;
@@ -627,6 +652,11 @@ void AutoBalancer::getTargetParameters()
     }
     if ( gg_is_walking ) {
       gg->set_default_zmp_offsets(default_zmp_offsets);
+      act_zmp = current_root_R * act_zmp + current_root_p;
+      act_cog = current_root_R * act_cog + current_root_p;
+      gg->set_act_zmp(act_zmp);
+      gg->set_act_cog(act_cog);
+      gg->set_act_cogvel(act_cogvel);
       gg_solved = gg->proc_one_tick();
       {
           std::map<leg_type, std::string> leg_type_map = gg->get_leg_type_map();
@@ -1415,12 +1445,17 @@ bool AutoBalancer::setGaitGeneratorParam(const OpenHRP::AutoBalancerService::Gai
   gg->set_leg_default_translate_pos(off);
   gg->set_default_step_time(i_param.default_step_time);
   gg->set_default_step_height(i_param.default_step_height);
-  // gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio/2.0);
-  // gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio/2.0);
-  // gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio/2.0);
-  // gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio/2.0);
-  // gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio/2.0);
-  // gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio/2.0);
+  gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio/2.0);
+  gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio/2.0);
+  gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio/2.0);
+  gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio/2.0);
+  gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio/2.0);
+  gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio/2.0);
+  gg->set_use_zmp_feedback_walk(i_param.use_zmp_feedback_walk);
+  // gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio_before);
+  // gg->set_default_double_support_ratio_after(i_param.default_double_support_ratio_after);
+  // gg->set_default_double_support_static_ratio_before(i_param.default_double_support_static_ratio_before);
+  // gg->set_default_double_support_static_ratio_after(i_param.default_double_support_static_ratio_after);
   // gg->set_default_double_support_ratio_swing_before(i_param.default_double_support_ratio_before);
   // gg->set_default_double_support_ratio_swing_after(i_param.default_double_support_ratio_after);
   gg->set_default_double_support_ratio_before(i_param.default_double_support_ratio_before);
@@ -1493,6 +1528,7 @@ bool AutoBalancer::getGaitGeneratorParam(OpenHRP::AutoBalancerService::GaitGener
   i_param.default_double_support_ratio_swing_after = gg->get_default_double_support_ratio_swing_after();
   i_param.default_double_support_ratio = i_param.default_double_support_ratio_before + i_param.default_double_support_ratio_after;
   i_param.default_double_support_static_ratio = i_param.default_double_support_static_ratio_before + i_param.default_double_support_static_ratio_after;
+  i_param.use_zmp_feedback_walk = gg->get_use_zmp_feedback_walk();
   if (gg->get_default_orbit_type() == SHUFFLING) {
     i_param.default_orbit_type = OpenHRP::AutoBalancerService::SHUFFLING;
   } else if (gg->get_default_orbit_type() == CYCLOID) {
