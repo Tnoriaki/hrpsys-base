@@ -684,13 +684,15 @@ void AutoBalancer::getTargetParameters()
       }
       // set ref_forces
       {
+          size_t kick_leg_index(contact_states_index_map[gg->get_swing_leg_names().front()]);
+          size_t support_leg_index(contact_states_index_map[gg->get_support_leg_names().front()]);
           std::vector<hrp::Vector3> ee_pos;
           for (size_t i = 0 ; i < leg_names.size(); i++) {
               ABCIKparam& tmpikp = ikp[leg_names[i]];
               ee_pos.push_back(tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[i]);
           }
-          hrp::Vector3 tmp_ref_cog(m_robot->calcCM());
-          double alpha = (ref_zmp - ee_pos[1]).norm() / ((ee_pos[0] - ref_zmp).norm() + (ee_pos[1] - ref_zmp).norm());
+          // double alpha = (ref_zmp - ee_pos[1]).norm() / ((ee_pos[0] - ref_zmp).norm() + (ee_pos[1] - ref_zmp).norm());
+          double alpha = (ref_zmp - ee_pos[kick_leg_index]).norm() / (ee_pos[support_leg_index] - ee_pos[kick_leg_index]).norm();
           if (alpha>1.0) alpha = 1.0;
           if (alpha<0.0) alpha = 0.0;
           if (DEBUGP) {
@@ -707,44 +709,20 @@ void AutoBalancer::getTargetParameters()
           m_force[1].data[2] = (1-alpha) * M * (cog_acc(2) + G);
 
           if(gg->get_skate_acc()(0) != 0){
-              //Modify Fx for rolling friction
-              // m_force[0].data[0] = - m_force[0].data[2] * mu_rolling;
-              // m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
-              m_force[1].data[0] = - m_force[0].data[2] * mu_rolling;
-              m_force[0].data[0] = - M * gg->get_skate_acc()(0) + m_force[1].data[2] * mu_rolling;
-              //Modify Fz for Static Friction
-              // double A = mu_rolling * G;
-              // double B = - gg->get_skate_acc()(0);
-              // double E = std::sqrt((mu*G)*(mu*G) - cog_acc(1)*cog_acc(1));
-              // double alpha_lim = (E - B) / (E + A);
-
-              //For Support Leg
-              if ( m_force[0].data[2] < std::sqrt( std::pow(m_force[0].data[1],2) + std::pow(m_force[0].data[0],2)) / mu ){
-                  m_force[0].data[2] = std::sqrt( std::pow(m_force[0].data[1],2) + std::pow(m_force[0].data[0],2)) / mu;
-                  m_force[1].data[2] = M * G - m_force[0].data[2];
-                  m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
+              // Modify Fx for rolling friction
+              m_force[support_leg_index].data[0] = - m_force[support_leg_index].data[2] * mu_rolling;
+              m_force[kick_leg_index].data[0] = - M * gg->get_skate_acc()(0) + m_force[support_leg_index].data[2] * mu_rolling;
+              // Modify Fz for maximum static friction force
+              double min_normal_force;
+              for (size_t i = 0; i < leg_names.size(); i++){
+                  min_normal_force = std::sqrt(std::pow(m_force[i].data[0],2) + std::pow(m_force[i].data[1],2)) / mu ;
+                  if ( m_force[i].data[2] < min_normal_force ){
+                      m_force[i].data[2] = min_normal_force;
+                      m_force[(i+1)%2].data[2] = M*G - min_normal_force;
+                      m_force[support_leg_index].data[0] = - m_force[support_leg_index].data[2] * mu_rolling;
+                      m_force[kick_leg_index].data[0] = - M * gg->get_skate_acc()(0) + m_force[support_leg_index].data[2] * mu_rolling;
+                  }
               }
-
-              // For Kick Leg
-              // if ( m_force[1].data[2] < std::sqrt( std::pow(m_force[1].data[0],2) + std::pow(m_force[1].data[1],2)) / mu ){
-              //     m_force[1].data[2] = std::sqrt( std::pow(m_force[1].data[0],2) + std::pow(m_force[1].data[1],2)) / mu;
-              //     m_force[0].data[2] = M * G - m_force[0].data[2];
-              //     m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
-              // }
-
-              // if ( alpha < 1 - alpha_lim ){ // only double support phase
-              //     // m_force[0].data[2] = M * G * alpha_lim;
-              //     // m_force[1].data[2] = M * G * (1-alpha_lim);
-              //     // m_force[1].data[0] = - M * gg->get_skate_acc()(0) + m_force[0].data[2] * mu_rolling;
-              //     m_force[0].data[2] = M * G * (1-alpha_lim);
-              //     m_force[1].data[2] = M * G * alpha_lim;
-              //     m_force[0].data[0] = - M * gg->get_skate_acc()(0) + m_force[1].data[2] * mu_rolling;
-              // }
-          }else{
-              // m_force[0].data[1] = 0;
-              // m_force[1].data[0] = - M * gg->get_skate_acc()(0);
-              m_force[1].data[0] = 0;
-              m_force[0].data[0] = - M * gg->get_skate_acc()(0);
           }
       }
       // set limbCOPOffset
