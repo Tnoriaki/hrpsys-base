@@ -701,12 +701,12 @@ void AutoBalancer::getTargetParameters()
           double M = m_robot->totalMass();
           double G = gg->get_gravitational_acceleration();
           hrp::Vector3 cog_acc = gg->get_cog_acc();
-          m_force[0].data[0] = alpha * M * cog_acc(0);
-          m_force[1].data[0] = (1-alpha) * M * cog_acc(0);
-          m_force[0].data[1] = alpha * M * cog_acc(1);
-          m_force[1].data[1] = (1-alpha) * M * cog_acc(1);
-          m_force[0].data[2] = alpha * M * (cog_acc(2) + G);
-          m_force[1].data[2] = (1-alpha) * M * (cog_acc(2) + G);
+          m_force[support_leg_index].data[0] = alpha * M * cog_acc(0);
+          m_force[support_leg_index].data[1] = alpha * M * cog_acc(1);
+          m_force[support_leg_index].data[2] = alpha * M * (cog_acc(2)+G);
+          m_force[kick_leg_index].data[0] = (1-alpha) * M * cog_acc(0);
+          m_force[kick_leg_index].data[1] = (1-alpha) * M * cog_acc(1);
+          m_force[kick_leg_index].data[2] = (1-alpha) * M * (cog_acc(2)+G);
 
           if(gg->get_skate_acc()(0) != 0){
               // Modify Fx for rolling friction
