@@ -112,8 +112,11 @@ RTC::ReturnCode_t RobotHardware::onInitialize()
   if (!loadBodyFromModelLoader(m_robot, prop["model"].c_str(), 
                                CosNaming::NamingContext::_duplicate(naming.getRootContext())
           )){
-      std::cerr << "failed to load model[" << prop["model"] << "]" 
-                << std::endl;
+      if (prop["model"] == ""){
+          std::cerr << "[" << m_profile.instance_name << "] path to the model file is not defined. Please check the configuration file" << std::endl;
+      }else{
+          std::cerr << "[" << m_profile.instance_name << "] failed to load model[" << prop["model"] << "]" << std::endl;
+      }
   }
 
   std::vector<std::string> keys = prop.propertyNames();
@@ -219,10 +222,8 @@ RTC::ReturnCode_t RobotHardware::onDeactivated(RTC::UniqueId ec_id)
 RTC::ReturnCode_t RobotHardware::onExecute(RTC::UniqueId ec_id)
 {
     //std::cout << "RobotHardware:onExecute(" << ec_id << ")" << std::endl;
-  coil::TimeValue coiltm(coil::gettimeofday());
-  Time tm; 
-  tm.sec  = coiltm.sec();
-  tm.nsec = coiltm.usec() * 1000;
+  Time tm;
+  this->getTimeNow(tm);
 
   if (!m_isDemoMode){
       robot::emg_reason reason;

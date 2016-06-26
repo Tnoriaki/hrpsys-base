@@ -874,6 +874,9 @@ class HrpsysConfigurator:
         if self.rmfo != None:
             for sen in filter(lambda x: x.type == "Force", self.sensors):
                 self.connectLoggerPort(self.rmfo, "off_"+sen.name)
+        if self.rfu != None:
+            for sen in filter(lambda x: x.type == "Force", self.sensors):
+                self.connectLoggerPort(self.rfu, "ref_"+sen.name+"Out")
         self.log_svc.clear()
         ## parallel running log process (outside from rtcd) for saving logs by emergency signal
         if self.log and (self.log_use_owned_ec or not isinstance(self.log.owned_ecs[0], OpenRTM._objref_ExtTrigExecutionContextService)):
@@ -943,9 +946,9 @@ class HrpsysConfigurator:
         print(self.configurator_name + "simulation_mode : %s" % self.simulation_mode)
 
     def waitForRTCManagerAndRoboHardware(self, robotname="Robot", managerhost=nshost):
-        print("\033[93m%s waitForRTCManagerAndRoboHardware has renamed to \
-        waitForRTCManagerAndRoboHardware: Please update your code\033[0m" % self.configurator_name)
-        return self.waitForRTCManagerAndRobotHardware(robotname=robotname, managerhost=nshost)
+        print("\033[93m%s waitForRTCManagerAndRoboHardware has renamed to " % self.configurator_name + \
+              "waitForRTCManagerAndRoboHardware: Please update your code\033[0m")
+        return self.waitForRTCManagerAndRobotHardware(robotname=robotname, managerhost=managerhost)
 
     def waitForRTCManagerAndRobotHardware(self, robotname="Robot", managerhost=nshost):
         '''!@brief
@@ -1134,6 +1137,14 @@ class HrpsysConfigurator:
         @param gname str: Name of the joint group.
         '''
         self.seq_svc.waitInterpolationOfGroup(gname)
+
+    def setInterpolationMode(self, mode):
+        '''!@brief
+        set interpolation mode.
+        @param i_mode_ new interpolation mode
+        @return true if set successfully, false otherwise
+        '''
+        return self.seq_svc.setInterpolationMode(mode)
 
     def getJointAngles(self):
         '''!@brief
