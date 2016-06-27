@@ -707,6 +707,7 @@ void Stabilizer::calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matri
 
 void Stabilizer::getActualParameters ()
 {
+  static bool switch_contact_states_flag = false;
   // Actual world frame =>
   hrp::Vector3 foot_origin_pos;
   hrp::Matrix33 foot_origin_rot;
@@ -759,8 +760,13 @@ void Stabilizer::getActualParameters ()
     //act_cogvel = foot_origin_rot.transpose() * act_cogvel;
     if (contact_states != prev_contact_states) {
       act_cogvel = (foot_origin_rot.transpose() * prev_act_foot_origin_rot) * act_cogvel;
+      switch_contact_states_flag = true;
     } else {
       act_cogvel = (act_cog - prev_act_cog)/dt;
+      if (switch_contact_states_flag){
+        if(use_cogvel_filter_reset) act_cogvel_filter->reset(ref_cogvel);
+        switch_contact_states_flag = false;
+      }
     }
     prev_act_foot_origin_rot = foot_origin_rot;
     act_cogvel = act_cogvel_filter->passFilter(act_cogvel);
@@ -1569,6 +1575,7 @@ void Stabilizer::sync_2_st ()
   pangx_ref = pangy_ref = pangx = pangy = 0;
   rdx = rdy = rx = ry = 0;
   d_rpy[0] = d_rpy[1] = 0;
+  use_cogvel_filter_reset = false;
   pdr = hrp::Vector3::Zero();
   pos_ctrl = hrp::Vector3::Zero();
   for (size_t i = 0; i < stikp.size(); i++) {
@@ -1755,6 +1762,7 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
   default: break;
   }
   i_stp.emergency_check_mode = emergency_check_mode;
+  i_stp.use_cogvel_filter_reset = use_cogvel_filter_reset;
   i_stp.end_effector_list.length(stikp.size());
   for (size_t i = 0; i < stikp.size(); i++) {
       const rats::coordinates cur_ee = rats::coordinates(stikp.at(i).localp, stikp.at(i).localR);
@@ -1906,6 +1914,7 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
   setBoolSequenceParam(is_feedback_control_enable, i_stp.is_feedback_control_enable, std::string("is_feedback_control_enable"));
   setBoolSequenceParam(is_zmp_calc_enable, i_stp.is_zmp_calc_enable, std::string("is_zmp_calc_enable"));
   emergency_check_mode = i_stp.emergency_check_mode;
+  use_cogvel_filter_reset = i_stp.use_cogvel_filter_reset;
 
   transition_time = i_stp.transition_time;
   cop_check_margin = i_stp.cop_check_margin;
