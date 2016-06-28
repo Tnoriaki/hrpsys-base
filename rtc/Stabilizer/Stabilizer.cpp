@@ -760,16 +760,18 @@ void Stabilizer::getActualParameters ()
     //act_cogvel = foot_origin_rot.transpose() * act_cogvel;
     if (contact_states != prev_contact_states) {
       act_cogvel = (foot_origin_rot.transpose() * prev_act_foot_origin_rot) * act_cogvel;
-      switch_contact_states_flag = true;
     } else {
       act_cogvel = (act_cog - prev_act_cog)/dt;
-      if (switch_contact_states_flag){
-        if(use_cogvel_filter_reset) act_cogvel_filter->reset(ref_cogvel);
-        switch_contact_states_flag = false;
-      }
     }
     prev_act_foot_origin_rot = foot_origin_rot;
-    act_cogvel = act_cogvel_filter->passFilter(act_cogvel);
+    // reset cogvel filter at switching contact states
+    if(use_cogvel_filter_reset && switch_contact_states_flag) {
+        act_cogvel_filter->reset(act_cogvel);
+        switch_contact_states_flag = false;
+    }else{
+        act_cogvel = act_cogvel_filter->passFilter(act_cogvel);
+        if (use_cogvel_filter_reset && contact_states != prev_contact_states) switch_contact_states_flag = true;
+    }
     prev_act_cog = act_cog;
     //act_root_rot = m_robot->rootLink()->R;
     for (size_t i = 0; i < stikp.size(); i++) {
