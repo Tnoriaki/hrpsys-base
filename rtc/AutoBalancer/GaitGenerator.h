@@ -26,24 +26,25 @@ namespace rats
         leg_type l_r;
         coordinates worldcoords;
         double step_height, step_time, toe_angle, heel_angle;
+        hrp::Vector3 dist_refzmp_offset;
         step_node () : l_r(RLEG), worldcoords(coordinates()),
                        step_height(), step_time(),
-                       toe_angle(), heel_angle(){};
+                       toe_angle(), heel_angle(), dist_refzmp_offset(){};
         step_node (const leg_type _l_r, const coordinates& _worldcoords,
                    const double _step_height, const double _step_time,
-                   const double _toe_angle, const double _heel_angle)
+                   const double _toe_angle, const double _heel_angle, const hrp::Vector3 _dist_refzmp_offset = hrp::Vector3::Zero())
             : l_r(_l_r), worldcoords(_worldcoords),
               step_height(_step_height), step_time(_step_time),
-              toe_angle(_toe_angle), heel_angle(_heel_angle) {};
+              toe_angle(_toe_angle), heel_angle(_heel_angle), dist_refzmp_offset(_dist_refzmp_offset){};
         step_node (const std::string& _l_r, const coordinates& _worldcoords,
                    const double _step_height, const double _step_time,
-                   const double _toe_angle, const double _heel_angle)
+                   const double _toe_angle, const double _heel_angle, const hrp::Vector3 _dist_refzmp_offset = hrp::Vector3::Zero())
             : l_r((_l_r == "rleg") ? RLEG :
                   (_l_r == "rarm") ? RARM :
                   (_l_r == "larm") ? LARM :
                   LLEG), worldcoords(_worldcoords),
               step_height(_step_height), step_time(_step_time),
-              toe_angle(_toe_angle), heel_angle(_heel_angle) {};
+              toe_angle(_toe_angle), heel_angle(_heel_angle), dist_refzmp_offset(_dist_refzmp_offset){};
         friend std::ostream &operator<<(std::ostream &os, const step_node &sn)
         {
             os << "footstep" << std::endl;
@@ -56,7 +57,7 @@ namespace rats
             os << "  rot =";
             os << (sn.worldcoords.rot).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", "", " [", "]")) << std::endl;
             os << "  step_height = " << sn.step_height << "[m], step_time = " << sn.step_time << "[s], "
-               << "toe_angle = " << sn.toe_angle << "[deg], heel_angle = " << sn.heel_angle << "[deg]";
+               << "toe_angle = " << sn.toe_angle << "[deg], heel_angle = " << sn.heel_angle << "[deg], dist_refzmp_offset = " << sn.dist_refzmp_offset << "[m]";
             return os;
         };
     };
@@ -1216,12 +1217,12 @@ namespace rats
       return hrp::Vector3(refcog_acc[0], refcog_acc[1], refcog_acc[2]);
     };
     const hrp::Vector3& get_refzmp () {
-      //for skate
-      /* hrp::Vector3 modif_refzmp = refzmp; */
-      /* modif_refzmp(0) += lcg.get_skate_acc()(0) * cog(2) / gravitational_acceleration; */
-        if(lcg.get_default_orbit_type() == CYCLOIDDELAYKICK && lcg.get_skate_acc()(0) != 0){
-            refzmp(0) = cog(0) + lcg.get_skate_acc()(0) * cog(2) / gravitational_acceleration;
-        }
+        //for skate
+        if (lcg.get_default_orbit_type() == CYCLOIDDELAYKICK && lcg.get_skate_acc()(0) != 0)
+            refzmp(0) += lcg.get_skate_acc()(0) * cog(2) / gravitational_acceleration;
+        // if(lcg.get_default_orbit_type() == CYCLOIDDELAYKICK && lcg.get_skate_acc()(0) != 0){
+        //     refzmp(0) = cog(0) + lcg.get_skate_acc()(0) * cog(2) / gravitational_acceleration;
+        // }
       return refzmp;
     };
     hrp::Vector3 get_cart_zmp () const

@@ -91,9 +91,9 @@ namespace rats
     std::vector<hrp::Vector3> dzl;
     std::vector<hrp::Vector3> foot_x_axises;
     double sum_of_weight = 0.0;
-
+    hrp::Vector3 dist_refzmp_offset = fns.front().dist_refzmp_offset;
     for (std::vector<step_node>::const_iterator it = _support_leg_steps.begin(); it != _support_leg_steps.end(); it++) {
-        dzl.push_back((it->worldcoords.rot * default_zmp_offsets[it->l_r] + it->worldcoords.pos) * zmp_weight_map[it->l_r]);
+        dzl.push_back((it->worldcoords.rot * default_zmp_offsets[it->l_r] + it->worldcoords.rot * dist_refzmp_offset + it->worldcoords.pos) * zmp_weight_map[it->l_r]);
         sum_of_weight += zmp_weight_map[it->l_r];
         foot_x_axises.push_back( hrp::Vector3(it->worldcoords.rot * hrp::Vector3::UnitX()) );
     }

@@ -1265,6 +1265,9 @@ bool AutoBalancer::setFootSteps(const OpenHRP::AutoBalancerService::FootstepsSeq
           spss[i].sps[j].step_time = gg->get_default_step_time();
           spss[i].sps[j].toe_angle = ((!gg_is_walking && i==0) ? 0.0 : gg->get_toe_angle());
           spss[i].sps[j].heel_angle = ((!gg_is_walking && i==0) ? 0.0 : gg->get_heel_angle());
+          for (size_t k = 0; k < spss[i].sps[j].dist_refzmp_offset.length(); k++) {
+              spss[i].sps[j].dist_refzmp_offset[k] = 0.0;
+          }
       }
   }
   setFootStepsWithParam(fss, spss, overwrite_fs_idx);
@@ -1343,7 +1346,8 @@ bool AutoBalancer::setFootStepsWithParam(const OpenHRP::AutoBalancerService::Foo
             if (!(gg_is_walking && i == 0)) { // If initial footstep, e.g., not walking, pass user-defined footstep list. If walking, pass cdr footsteps in order to neglect initial double support leg.
                 std::vector<step_node> tmp_fns;
                 for (size_t j = 0; j < fs_vec_list.at(i).size(); j++) {
-                    tmp_fns.push_back(step_node(leg_name_vec_list[i][j], fs_vec_list[i][j], spss[i].sps[j].step_height, spss[i].sps[j].step_time, spss[i].sps[j].toe_angle, spss[i].sps[j].heel_angle));
+                    hrp::Vector3 tmp_dist_refzmp_offset = hrp::Vector3(spss[i].sps[j].dist_refzmp_offset[0],spss[i].sps[j].dist_refzmp_offset[1],spss[i].sps[j].dist_refzmp_offset[2]);
+                    tmp_fns.push_back(step_node(leg_name_vec_list[i][j], fs_vec_list[i][j], spss[i].sps[j].step_height, spss[i].sps[j].step_time, spss[i].sps[j].toe_angle, spss[i].sps[j].heel_angle, tmp_dist_refzmp_offset));
                 }
                 fnsl.push_back(tmp_fns);
             }
