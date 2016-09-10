@@ -30,7 +30,7 @@ class IIRFilter
      \param fb_coeffs coeeficients of feedback
      \param ff_coeffs coefficients of feedforward
   */
-  IIRFilter(int dim, std::vector<double>& fb_coeffs, std::vector<double>& ff_coeffs, const std::string& error_prefix = "");
+  IIRFilter(unsigned int dim, std::vector<double>& fb_coeffs, std::vector<double>& ff_coeffs, const std::string& error_prefix = "");
   /**
      \brief Destructor
   */
@@ -60,7 +60,7 @@ private:
     T prev_value;
     double cutoff_freq, dt, const_param;
 public:
-    FirstOrderLowPassFilter (const double _cutoff_freq, const double _dt, const T init_value) : dt(_dt), prev_value(init_value)
+    FirstOrderLowPassFilter (const double _cutoff_freq, const double _dt, const T init_value) : prev_value(init_value), dt(_dt)
     {
         setCutOffFreq(_cutoff_freq);
     };
@@ -79,7 +79,7 @@ public:
         const_param = 2 * M_PI * cutoff_freq * dt;
     };
     double getCutOffFreq () const { return cutoff_freq; };
-    double getCurrentValue () const { return prev_value; };
+    T getCurrentValue () const { return prev_value; };
 };
 
 #endif // IIRFilter_H
