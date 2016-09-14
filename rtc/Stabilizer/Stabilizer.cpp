@@ -674,7 +674,7 @@ void Stabilizer::getCurrentParameters ()
   }
 }
 
-void Stabilizer::calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matrix33& foot_origin_rot)
+void Stabilizer::calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matrix33& foot_origin_rot, double ratio)
 {
   rats::coordinates leg_c[2], tmpc;
   hrp::Vector3 ez = hrp::Vector3::UnitZ();
@@ -693,7 +693,7 @@ void Stabilizer::calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matri
   }
   if (contact_states[contact_states_index_map["rleg"]] &&
       contact_states[contact_states_index_map["lleg"]]) {
-    rats::mid_coords(tmpc, 0.5, leg_c[0], leg_c[1]);
+    rats::mid_coords(tmpc, ratio, leg_c[0], leg_c[1]);
     foot_origin_pos = tmpc.pos;
     foot_origin_rot = tmpc.rot;
   } else if (contact_states[contact_states_index_map["rleg"]]) {
@@ -765,10 +765,12 @@ void Stabilizer::getActualParameters ()
     }
     prev_act_foot_origin_rot = foot_origin_rot;
     // reset cogvel filter at switching contact states
+    hrp::Vector3 prev_act_cogvel(hrp::Vector3::Zero());
     if(use_cogvel_filter_reset && switch_contact_states_flag) {
         act_cogvel_filter->reset(act_cogvel);
         switch_contact_states_flag = false;
     }else{
+        prev_act_cogvel = act_cogvel_filter->getCurrentValue();
         act_cogvel = act_cogvel_filter->passFilter(act_cogvel);
         if (use_cogvel_filter_reset && contact_states != prev_contact_states) switch_contact_states_flag = true;
     }
@@ -793,10 +795,34 @@ void Stabilizer::getActualParameters ()
     // new ZMP calculation
     // Kajita's feedback law
     //   Basically Equation (26) in the paper [1].
+    double tmp_eefm_k1_x = eefm_k1[0];
+    double tmp_eefm_k2_x = eefm_k2[0];
+    double tmp_eefm_k3_x = eefm_k3[0];
+    double new_refzmp_offset_x = 0;
+    double dzmp_offset_x = 0;
+    // compensation for skating
+    if ( ( !contact_states[0] || !contact_states[1] ) && use_cogvel_filter_reset ) {
+        static size_t skating_count = 0;
+        static double ref_skating_vel = 0.5;
+        static double mu_rolling = 0.1;
+        static double swing_time(m_controlSwingSupportTime.data[0]);
+        skating_count %= size_t(swing_time/dt);
+        skating_count ++;
+        if ( skating_count * dt < (ref_skating_vel / (eefm_gravitational_acceleration * mu_rolling)) ){
+            new_refzmp_offset_x = 0.07;
+            dzmp_offset_x = 0.07;
+        }
+    }
+    eefm_k1[0] = tmp_eefm_k1_x;
+    eefm_k2[0] = tmp_eefm_k2_x;
+    eefm_k3[0] = tmp_eefm_k3_x;
     hrp::Vector3 dcog=foot_origin_rot * (ref_cog - act_cog);
     hrp::Vector3 dcogvel=foot_origin_rot * (ref_cogvel - act_cogvel);
-    hrp::Vector3 dzmp=foot_origin_rot * (ref_zmp - act_zmp);
+    // hrp::Vector3 dzmp=foot_origin_rot * (ref_zmp - act_zmp);
+    hrp::Vector3 dzmp=foot_origin_rot * (prev_ref_zmp - act_zmp);
     new_refzmp = foot_origin_rot * new_refzmp + foot_origin_pos;
+    dzmp(0) -= dzmp_offset_x;
+    new_refzmp(0) += new_refzmp_offset_x;
     for (size_t i = 0; i < 2; i++) {
       new_refzmp(i) += eefm_k1[i] * transition_smooth_gain * dcog(i) + eefm_k2[i] * transition_smooth_gain * dcogvel(i) + eefm_k3[i] * transition_smooth_gain * dzmp(i) + ref_zmp_aux(i);
     }
