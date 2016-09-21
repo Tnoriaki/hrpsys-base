@@ -127,12 +127,24 @@ public:
       // check whether p is inside support polygon
       for (size_t i = 0; i < convex_vertices.size() - 1; i++) {
         if (calcCrossProduct(p, convex_vertices[i + 1], convex_vertices[i]) < 0) {
-          p = (p - convex_vertices[i]).dot(convex_vertices[i+1] - convex_vertices[i]) * (convex_vertices[i+1] - convex_vertices[i]).normalized() / (convex_vertices[i+1] - convex_vertices[i]).norm() + convex_vertices[i];
+          Eigen::Vector2d v1 = p - convex_vertices[i];
+          Eigen::Vector2d v2 = convex_vertices[i+1] - convex_vertices[i];
+          double ratio = v1.dot(v2) / ( v2.norm() * v2.norm() );
+          if (ratio < 0) ratio = 0;
+          if (ratio > 1) ratio = 1;
+          p = convex_vertices[i] + ratio * v2;
+          // p = (p - convex_vertices[i]).dot(convex_vertices[i+1] - convex_vertices[i]) * (convex_vertices[i+1] - convex_vertices[i]).normalized() / (convex_vertices[i+1] - convex_vertices[i]).norm() + convex_vertices[i];
           return false;
         }
       }
       if (calcCrossProduct(p, convex_vertices.front(), convex_vertices.back()) < 0) {
-        p = (p - convex_vertices.back()).dot(convex_vertices.front() - convex_vertices.back()) * (convex_vertices.front() - convex_vertices.back()).normalized() / (convex_vertices.front() - convex_vertices.back()).norm() + convex_vertices.back();
+        Eigen::Vector2d v1 = p - convex_vertices.back();
+        Eigen::Vector2d v2 = convex_vertices.front() - convex_vertices.back();
+        double ratio = v1.dot(v2) / ( v2.norm() * v2.norm() );
+        if (ratio < 0) ratio = 0;
+        if (ratio > 1) ratio = 1;
+        p = convex_vertices.back() + ratio * v2;
+        // p = (p - convex_vertices.back()).dot(convex_vertices.front() - convex_vertices.back()) * (convex_vertices.front() - convex_vertices.back()).normalized() / (convex_vertices.front() - convex_vertices.back()).norm() + convex_vertices.back();
         return false;
       }
       return true;
