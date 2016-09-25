@@ -792,7 +792,6 @@ void Stabilizer::getActualParameters ()
     for (size_t i = 0; i < 2; i++) {
       new_refzmp(i) += eefm_k1[i] * transition_smooth_gain * dcog(i) + eefm_k2[i] * transition_smooth_gain * dcogvel(i) + eefm_k3[i] * transition_smooth_gain * dzmp(i) + ref_zmp_aux(i);
     }
-
     if (DEBUGP) {
       // All state variables are foot_origin coords relative
       std::cerr << "[" << m_profile.instance_name << "] state values" << std::endl;
