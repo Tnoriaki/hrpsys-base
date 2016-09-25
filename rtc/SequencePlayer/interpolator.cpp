@@ -106,7 +106,11 @@ double interpolator::calc_interpolation_time(const double *newg)
   }
   remain_t_ = max_diff/default_avg_vel;
 #define MIN_INTERPOLATION_TIME	(1.0)
-  if (remain_t_ < MIN_INTERPOLATION_TIME) remain_t_ = MIN_INTERPOLATION_TIME;
+  if (remain_t_ < MIN_INTERPOLATION_TIME) {
+      std::cerr << "[interpolator][" << name << "] MIN_INTERPOLATION_TIME violated!! Limit remain_t (" << remain_t << ") by MIN_INTERPOLATION_TIME (" << MIN_INTERPOLATION_TIME << ")."
+                << "(max_diff = " << max_diff << ", default_avg_vel = " << default_avg_vel << ")" << std::endl;;
+      remain_t_ = MIN_INTERPOLATION_TIME;
+  }
   return remain_t_;
 }
 
@@ -224,13 +228,13 @@ void interpolator::load(const char *fname, double time_to_start, double scale,
   vs = new double[dim];
   strm >> time;
   while(strm.eof()==0){
-    for (int i=0; i<offset1; i++){
+    for (size_t i=0; i<offset1; i++){
       strm >> tmp;
     }
     for (int i=0; i<dim; i++){
       strm >> vs[i];
     }
-    for (int i=0; i<offset2; i++){
+    for (size_t i=0; i<offset2; i++){
       strm >> tmp;
     }
     if (ptime <0){

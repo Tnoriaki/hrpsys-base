@@ -10,6 +10,8 @@
 #ifndef AUTOBALANCER_H
 #define AUTOBALANCER_H
 
+#include <rtm/idl/BasicDataType.hh>
+#include <rtm/idl/ExtendedDataTypes.hh>
 #include <rtm/Manager.h>
 #include <rtm/DataFlowComponentBase.h>
 #include <rtm/CorbaPort.h>
@@ -197,7 +199,7 @@ class AutoBalancer
   };
   void getCurrentParameters();
   void getTargetParameters();
-  bool solveLimbIKforLimb (ABCIKparam& param);
+  bool solveLimbIKforLimb (ABCIKparam& param, const std::string& limb_name);
   void solveLimbIK();
   void startABCparam(const ::OpenHRP::AutoBalancerService::StrSequence& limbs);
   void stopABCparam();
