@@ -1035,11 +1035,6 @@ public:
   {
     return (a(0) - o(0)) * (b(1) - o(1)) - (a(1) - o(1)) * (b(0) - o(0));
   };
-  double calcInnerProduct(Eigen::Vector2d& a, Eigen::Vector2d& b, Eigen::Vector2d& o)
-  {
-    return (a(0) - o(0)) * (b(0) - o(0)) + (a(1) - o(1)) * (b(1) - o(1));
-  };
-
 
   // assume that vertices are listed in clockwise order
   std::vector<Eigen::Vector2d> calcConvexHull(std::vector<Eigen::Vector2d> vertices)
