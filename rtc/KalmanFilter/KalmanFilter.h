@@ -112,6 +112,7 @@ protected:
   // </rtc-template>
 
   TimedAngularVelocity3D m_rate;
+  TimedAcceleration3D m_accRaw;
   TimedAcceleration3D m_acc;
   TimedAcceleration3D m_accRef;
   TimedOrientation3D m_rpy;
@@ -130,6 +131,7 @@ protected:
 
   // DataOutPort declaration
   // <rtc-template block="outport_declare">
+  OutPort<TimedAcceleration3D> m_accOut;
   OutPort<TimedOrientation3D> m_rpyOut;
   OutPort<TimedOrientation3D> m_rpyRawOut;
   RTC::TimedDoubleSeq m_qCurrent;
