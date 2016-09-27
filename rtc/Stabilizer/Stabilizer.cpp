@@ -44,6 +44,7 @@ Stabilizer::Stabilizer(RTC::Manager* manager)
     // <rtc-template block="initializer">
     m_qCurrentIn("qCurrent", m_qCurrent),
     m_qRefIn("qRef", m_qRef),
+    m_accIn("acc", m_acc),
     m_rpyIn("rpy", m_rpy),
     m_zmpRefIn("zmpRef", m_zmpRef),
     m_StabilizerServicePort("StabilizerService"),
@@ -104,6 +105,7 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
   // Set InPort buffers
   addInPort("qCurrent", m_qCurrentIn);
   addInPort("qRef", m_qRefIn);
+  addInPort("acc", m_accIn);
   addInPort("rpy", m_rpyIn);
   addInPort("zmpRef", m_zmpRefIn);
   addInPort("basePosIn", m_basePosIn);
@@ -486,6 +488,9 @@ RTC::ReturnCode_t Stabilizer::onExecute(RTC::UniqueId ec_id)
   }
   if (m_qCurrentIn.isNew()) {
     m_qCurrentIn.read();
+  }
+  if (m_accIn.isNew()) {
+    m_accIn.read();
   }
   if (m_rpyIn.isNew()) {
     m_rpyIn.read();
