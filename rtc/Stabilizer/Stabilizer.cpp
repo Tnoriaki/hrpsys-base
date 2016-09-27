@@ -818,8 +818,7 @@ void Stabilizer::getActualParameters ()
     eefm_k3[0] = tmp_eefm_k3_x;
     hrp::Vector3 dcog=foot_origin_rot * (ref_cog - act_cog);
     hrp::Vector3 dcogvel=foot_origin_rot * (ref_cogvel - act_cogvel);
-    // hrp::Vector3 dzmp=foot_origin_rot * (ref_zmp - act_zmp);
-    hrp::Vector3 dzmp=foot_origin_rot * (prev_ref_zmp - act_zmp);
+    hrp::Vector3 dzmp=foot_origin_rot * (ref_zmp - act_zmp);
     new_refzmp = foot_origin_rot * new_refzmp + foot_origin_pos;
     dzmp(0) -= dzmp_offset_x;
     new_refzmp(0) += new_refzmp_offset_x;
