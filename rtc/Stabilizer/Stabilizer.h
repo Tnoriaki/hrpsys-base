@@ -108,7 +108,7 @@ class Stabilizer
   void getCurrentParameters ();
   void getActualParameters ();
   void getTargetParameters ();
-  void calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matrix33& foot_origin_rot, double ratio = 0.0);
+  void calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matrix33& foot_origin_rot, double ratio = 0.5);
   void sync_2_st ();
   void sync_2_idle();
   bool calcZMP(hrp::Vector3& ret_zmp, const double zmp_z);
@@ -306,6 +306,8 @@ class Stabilizer
   std::vector<double> cp_check_margin, tilt_margin;
   OpenHRP::StabilizerService::EmergencyCheckMode emergency_check_mode;
   bool use_cogvel_filter_reset;
+  double foot_origin_ratio;
+  double skating_param[3];
 };
 
 

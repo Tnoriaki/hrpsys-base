@@ -355,6 +355,8 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
   is_walking = false;
   is_estop_while_walking = false;
   sbp_cog_offset = hrp::Vector3(0.0, 0.0, 0.0);
+  foot_origin_ratio = 0.5;
+  skating_param[0] = skating_param[1] = skating_param[2] = 0;
 
   // parameters for RUNST
   double ke = 0, tc = 0;
@@ -731,7 +733,7 @@ void Stabilizer::getActualParameters ()
     m_robot->rootLink()->R = act_Rs * (senR.transpose() * m_robot->rootLink()->R);
     m_robot->calcForwardKinematics();
     act_base_rpy = hrp::rpyFromRot(m_robot->rootLink()->R);
-    calcFootOriginCoords (foot_origin_pos, foot_origin_rot);
+    calcFootOriginCoords (foot_origin_pos, foot_origin_rot, foot_origin_ratio);
   } else {
     for ( int i = 0; i < m_robot->numJoints(); i++ ) {
       m_robot->joint(i)->q = qorg[i];
@@ -800,27 +802,22 @@ void Stabilizer::getActualParameters ()
     // new ZMP calculation
     // Kajita's feedback law
     //   Basically Equation (26) in the paper [1].
-    double tmp_eefm_k1_x = eefm_k1[0];
-    double tmp_eefm_k2_x = eefm_k2[0];
-    double tmp_eefm_k3_x = eefm_k3[0];
     double new_refzmp_offset_x = 0;
     double dzmp_offset_x = 0;
     // compensation for skating
+    static size_t skating_count = 0;
     if ( ( !contact_states[0] || !contact_states[1] ) && use_cogvel_filter_reset ) {
-        static size_t skating_count = 0;
-        static double ref_skating_vel = 0.5;
-        static double mu_rolling = 0.1;
-        static double swing_time(m_controlSwingSupportTime.data[0]);
-        skating_count %= size_t(swing_time/dt);
+        static double ref_skating_vel(skating_param[0]);
+        static double mu_rolling(skating_param[1]);
+        static double sliding_limit(skating_param[2]);
         skating_count ++;
-        if ( skating_count * dt < (ref_skating_vel / (eefm_gravitational_acceleration * mu_rolling)) ){
-            new_refzmp_offset_x = 0.07;
-            dzmp_offset_x = 0.07;
+        if ( skating_count * dt < (ref_skating_vel / (eefm_gravitational_acceleration * mu_rolling)) && skating_count * dt < sliding_limit ){
+            new_refzmp_offset_x = mu_rolling * ref_cog(2);
+            dzmp_offset_x = mu_rolling * ref_cog(2);
         }
+    } else {
+        skating_count = 0;
     }
-    eefm_k1[0] = tmp_eefm_k1_x;
-    eefm_k2[0] = tmp_eefm_k2_x;
-    eefm_k3[0] = tmp_eefm_k3_x;
     hrp::Vector3 dcog=foot_origin_rot * (ref_cog - act_cog);
     hrp::Vector3 dcogvel=foot_origin_rot * (ref_cogvel - act_cogvel);
     hrp::Vector3 dzmp=foot_origin_rot * (ref_zmp - act_zmp);
@@ -1122,7 +1119,7 @@ void Stabilizer::getTargetParameters ()
     // Reference foot_origin frame =>
     hrp::Vector3 foot_origin_pos;
     hrp::Matrix33 foot_origin_rot;
-    calcFootOriginCoords (foot_origin_pos, foot_origin_rot);
+    calcFootOriginCoords (foot_origin_pos, foot_origin_rot, foot_origin_ratio);
     // initialize for new_refzmp
     new_refzmp = ref_zmp;
     rel_cog = m_robot->rootLink()->R.transpose() * (ref_cog-m_robot->rootLink()->p);
@@ -1438,7 +1435,7 @@ void Stabilizer::calcEEForceMomentControl() {
       // Convert d_foot_pos in foot origin frame => "current" world frame
       hrp::Vector3 foot_origin_pos;
       hrp::Matrix33 foot_origin_rot;
-      calcFootOriginCoords (foot_origin_pos, foot_origin_rot);
+      calcFootOriginCoords (foot_origin_pos, foot_origin_rot, foot_origin_ratio);
       std::vector<hrp::Vector3> current_d_foot_pos;
       for (size_t i = 0; i < stikp.size(); i++)
           current_d_foot_pos.push_back(foot_origin_rot * stikp[i].d_foot_pos);
@@ -1793,6 +1790,10 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
   }
   i_stp.emergency_check_mode = emergency_check_mode;
   i_stp.use_cogvel_filter_reset = use_cogvel_filter_reset;
+  i_stp.foot_origin_ratio = foot_origin_ratio;
+  i_stp.skating_param[0] = skating_param[0];
+  i_stp.skating_param[1] = skating_param[1];
+  i_stp.skating_param[2] = skating_param[2];
   i_stp.end_effector_list.length(stikp.size());
   for (size_t i = 0; i < stikp.size(); i++) {
       const rats::coordinates cur_ee = rats::coordinates(stikp.at(i).localp, stikp.at(i).localR);
@@ -1945,6 +1946,10 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
   setBoolSequenceParam(is_zmp_calc_enable, i_stp.is_zmp_calc_enable, std::string("is_zmp_calc_enable"));
   emergency_check_mode = i_stp.emergency_check_mode;
   use_cogvel_filter_reset = i_stp.use_cogvel_filter_reset;
+  foot_origin_ratio = i_stp.foot_origin_ratio;
+  skating_param[0] = i_stp.skating_param[0];
+  skating_param[1] = i_stp.skating_param[1];
+  skating_param[2] = i_stp.skating_param[2];
 
   transition_time = i_stp.transition_time;
   cop_check_margin = i_stp.cop_check_margin;
