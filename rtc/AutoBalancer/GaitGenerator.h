@@ -446,10 +446,10 @@ namespace rats
           size_t swing_remain_count = one_step_count - current_count - double_support_count_after_for_skate;
           size_t swing_one_step_count = one_step_count - double_support_count_before_for_skate - double_support_count_after_for_skate;
           if (swing_remain_count*dt > time_offset) { // antecedent path is still interpolating
-            hoffarbib_interpolation_all (time_offset, interpolate_antecedent_path(start + take_off_dist, goal + landing_dist, height, ((swing_one_step_count - swing_remain_count) / (swing_one_step_count - time_offset/dt))), landing_vel, hrp::Vector3::Zero());
+            hoffarbib_interpolation_all (time_offset, interpolate_antecedent_path(start + take_off_dist, goal, height, ((swing_one_step_count - swing_remain_count) / (swing_one_step_count - time_offset/dt))), landing_vel, hrp::Vector3::Zero());
             skate_acc = hrp::Vector3::Zero();
           } else if (swing_remain_count > 0) { // antecedent path already reached to goal
-            hoffarbib_interpolation_all (swing_remain_count*dt, goal + landing_dist, landing_vel, hrp::Vector3::Zero());
+            hoffarbib_interpolation_all (swing_remain_count*dt, goal, landing_vel, hrp::Vector3::Zero());
             skate_acc = hrp::Vector3::Zero();
           } else { // swing_remain_count = 0
             pos += vel * dt;
