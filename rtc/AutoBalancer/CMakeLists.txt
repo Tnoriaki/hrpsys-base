@@ -1,5 +1,8 @@
-set(comp_sources AutoBalancer.cpp AutoBalancerService_impl.cpp ../ImpedanceController/JointPathEx.cpp ../ImpedanceController/RatsMatrix.cpp ../SequencePlayer/interpolator.cpp PreviewController.cpp GaitGenerator.cpp)
-set(libs hrpModel-3.1 hrpCollision-3.1 hrpUtil-3.1 hrpsysBaseStub)
+link_directories(${CMAKE_CURRENT_BINARY_DIR}/../../3rdparty/qpOASES/qpOASES-3.0/bin)
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/../../3rdparty/qpOASES/qpOASES-3.0/include)
+
+set(comp_sources AutoBalancer.cpp AutoBalancerService_impl.cpp ../ImpedanceController/JointPathEx.cpp ../ImpedanceController/RatsMatrix.cpp ../SequencePlayer/interpolator.cpp PreviewController.cpp GaitGenerator.cpp WrenchDistributor.cpp)
+set(libs hrpModel-3.1 hrpCollision-3.1 hrpUtil-3.1 hrpsysBaseStub qpOASES)
 add_library(AutoBalancer SHARED ${comp_sources})
 target_link_libraries(AutoBalancer ${libs})
 set_target_properties(AutoBalancer PROPERTIES PREFIX "")
@@ -10,12 +13,15 @@ target_link_libraries(testPreviewController ${libs})
 add_executable(testGaitGenerator testGaitGenerator.cpp ../ImpedanceController/RatsMatrix.cpp PreviewController.cpp GaitGenerator.cpp ../SequencePlayer/interpolator.cpp)
 target_link_libraries(testGaitGenerator ${libs})
 
+add_executable(testWrenchDistributor testWrenchDistributor.cpp WrenchDistributor.cpp PreviewController.cpp)
+target_link_libraries(testWrenchDistributor ${libs})
+
 add_executable(AutoBalancerComp AutoBalancerComp.cpp ${comp_sources})
 target_link_libraries(AutoBalancerComp ${libs})
 
 include_directories(${PROJECT_SOURCE_DIR}/rtc/SequencePlayer)
 
-set(target AutoBalancer AutoBalancerComp testPreviewController testGaitGenerator)
+set(target AutoBalancer AutoBalancerComp testPreviewController testGaitGenerator testWrenchDistributor)
 
 add_test(testPreviewControllerNoGP testPreviewController --use-gnuplot false)
 add_test(testGaitGeneratorTest0 testGaitGenerator --test0 --use-gnuplot false)
@@ -35,6 +41,7 @@ add_test(testGaitGeneratorTest13 testGaitGenerator --test13 --use-gnuplot false)
 add_test(testGaitGeneratorTest14 testGaitGenerator --test14 --use-gnuplot false)
 add_test(testGaitGeneratorTest15 testGaitGenerator --test15 --use-gnuplot false)
 add_test(testGaitGeneratorTest16 testGaitGenerator --test16 --use-gnuplot false)
+add_test(testWrenchDistributor testWrenchDistributor)
 
 install(TARGETS ${target}
   RUNTIME DESTINATION bin
