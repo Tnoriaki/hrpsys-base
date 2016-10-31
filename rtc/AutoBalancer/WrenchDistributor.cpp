@@ -20,10 +20,10 @@ void EndEffectorParam::calcFrictionConstraintsMatrix(hrp::dmatrix& C)
     } else if ( move_vec(2) == 0 ) { // sliding
         move_vec.normalize();
         C = hrp::dmatrix::Zero(4, state_dim);
-        C.block(0,0,1,3) <<  1, 0, -mu_vec(1)*move_vec(0);
-        C.block(1,0,1,3) << -1, 0,  mu_vec(1)*move_vec(0);
-        C.block(2,0,1,3) <<  0, 1, -mu_vec(1)*move_vec(1);
-        C.block(3,0,1,3) <<  0,-1,  mu_vec(1)*move_vec(1);
+        C.block(0,0,1,3) <<  1, 0, -mu_vec(1)*(-move_vec(0));
+        C.block(1,0,1,3) << -1, 0,  mu_vec(1)*(-move_vec(0));
+        C.block(2,0,1,3) <<  0, 1, -mu_vec(1)*(-move_vec(1));
+        C.block(3,0,1,3) <<  0,-1,  mu_vec(1)*(-move_vec(1));
     } else { // float
         C = hrp::dmatrix::Zero(2 * state_dim, state_dim);
         C.block(0,0,state_dim,state_dim) = hrp::dmatrix::Identity(state_dim,state_dim);
