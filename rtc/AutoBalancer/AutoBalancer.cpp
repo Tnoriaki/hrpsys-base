@@ -679,7 +679,6 @@ void AutoBalancer::getTargetParameters()
               std::map<leg_type, std::string> leg_type_map = gg->get_leg_type_map();
               for (std::vector<leg_type>::const_iterator it = tmp_current_support_states.begin(); it != tmp_current_support_states.end(); it++)
                   tmp_current_support_states_names.push_back(leg_type_map[*it]);
-              // if( gg->get_default_orbit_type() == CYCLOIDDELAYKICK && gg->get_swing_leg_take_off_vel() != hrp::Vector3::Zero() && tmp_current_support_states.size() == 2) tmp_current_support_states_names = gg->get_swing_leg_names();
           }
           // Set Contact States for ee not included in leg_names to false
           for ( std::map<std::string, size_t>::iterator it = contact_states_index_map.begin(); it != contact_states_index_map.end(); it++ ) {

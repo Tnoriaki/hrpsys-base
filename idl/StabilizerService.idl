@@ -221,6 +221,10 @@ module OpenHRP
       sequence<IKLimbParameters> ik_limb_parameters;
       /// Cogvel Filter reset at changing contact states
       boolean use_cogvel_filter_reset;
+      /// Foot origin ratio of doube support phase
+      double foot_origin_ratio;
+      /// skating param [skating_vel, mu_rolling, sliding_time]
+      DblArray3 skating_param;
     };
 
     /**
