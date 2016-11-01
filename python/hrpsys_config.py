@@ -12,6 +12,7 @@ from waitInput import waitInputConfirm
 import socket
 import time
 import subprocess
+from distutils.version import StrictVersion
 
 # copy from transformations.py, Christoph Gohlke, The Regents of the University of California
 
@@ -157,7 +158,7 @@ def euler_from_matrix(matrix, axes='sxyz'):
 
 # class for configure hrpsys RTCs and ports
 #   In order to specify robot-dependent code, please inherit this HrpsysConfigurator
-class HrpsysConfigurator:
+class HrpsysConfigurator(object):
 
     # RobotHardware
     rh = None
@@ -257,6 +258,11 @@ class HrpsysConfigurator:
     rfu_svc = None
     rfu_version = None
 
+    # Acceleration Filter
+    acf = None
+    acf_svc = None
+    acf_version = None
+
     # rtm manager
     ms = None
 
@@ -355,14 +361,14 @@ class HrpsysConfigurator:
         connectPorts(self.seq.port("basePos"), self.sh.port("basePosIn"))
         connectPorts(self.seq.port("baseRpy"), self.sh.port("baseRpyIn"))
         connectPorts(self.seq.port("zmpRef"), self.sh.port("zmpIn"))
-        if self.seq_version >= '315.2.6':
+        if StrictVersion(self.seq_version) >= StrictVersion('315.2.6'):
             connectPorts(self.seq.port("optionalData"), self.sh.port("optionalDataIn"))
         connectPorts(self.sh.port("basePosOut"), [self.seq.port("basePosInit"),
                                                   self.fk.port("basePosRef")])
         connectPorts(self.sh.port("baseRpyOut"), [self.seq.port("baseRpyInit"),
                                                   self.fk.port("baseRpyRef")])
         connectPorts(self.sh.port("qOut"), self.seq.port("qInit"))
-        if self.seq_version >= '315.2.0':
+        if StrictVersion(self.seq_version) >= StrictVersion('315.2.0'):
             connectPorts(self.sh.port("zmpOut"), self.seq.port("zmpRefInit"))
         for sen in self.getForceSensorNames():
             connectPorts(self.seq.port(sen + "Ref"),
@@ -386,6 +392,7 @@ class HrpsysConfigurator:
             connectPorts(self.seq.port("qRef"), self.st.port("qRefSeq"))
             connectPorts(self.abc.port("walkingStates"), self.st.port("walkingStates"))
             connectPorts(self.abc.port("sbpCogOffset"), self.st.port("sbpCogOffset"))
+            connectPorts(self.abc.port("toeheelRatio"), self.st.port("toeheelRatio"))
             if self.es:
                 connectPorts(self.st.port("emergencySignal"), self.es.port("emergencySignal"))
             connectPorts(self.st.port("emergencySignal"), self.abc.port("emergencySignal"))
@@ -445,14 +452,14 @@ class HrpsysConfigurator:
         # connection for ic
         if self.ic:
             connectPorts(self.rh.port("q"), self.ic.port("qCurrent"))
-            if self.seq_version >= '315.3.0':
+            if StrictVersion(self.seq_version) >= StrictVersion('315.3.0'):
                 connectPorts(self.sh.port("basePosOut"), self.ic.port("basePosIn"))
                 connectPorts(self.sh.port("baseRpyOut"), self.ic.port("baseRpyIn"))
         # connection for rfu
         if self.rfu:
             if self.es:
                 connectPorts(self.es.port("q"), self.rfu.port("qRef"))
-            if self.seq_version >= '315.3.0':
+            if StrictVersion(self.seq_version) >= StrictVersion('315.3.0'):
                 connectPorts(self.sh.port("basePosOut"), self.rfu.port("basePosIn"))
                 connectPorts(self.sh.port("baseRpyOut"), self.rfu.port("baseRpyIn"))
         # connection for tf
@@ -517,10 +524,11 @@ class HrpsysConfigurator:
         if self.el:
             connectPorts(self.rh.port("q"), self.el.port("qCurrent"))
 
-        # connection for co
+        # connection for es
         if self.es:
             connectPorts(self.rh.port("servoState"), self.es.port("servoStateIn"))
 
+        # connection for bp
         if self.bp:
             if self.tl:
                 connectPorts(self.tl.port("beepCommand"), self.bp.port("beepCommand"))
@@ -530,6 +538,20 @@ class HrpsysConfigurator:
                 connectPorts(self.el.port("beepCommand"), self.bp.port("beepCommand"))
             if self.co:
                 connectPorts(self.co.port("beepCommand"), self.bp.port("beepCommand"))
+
+        # connection for acf
+        if self.acf:
+            #   currently use first acc and rate sensors for acf
+            s_acc = filter(lambda s: s.type == 'Acceleration', self.sensors)
+            if (len(s_acc) > 0) and self.rh.port(s_acc[0].name) != None:
+                connectPorts(self.rh.port(s_acc[0].name), self.acf.port('accIn'))
+            s_rate = filter(lambda s: s.type == 'RateGyro', self.sensors)
+            if (len(s_rate) > 0) and self.rh.port(s_rate[0].name) != None:
+                connectPorts(self.rh.port(s_rate[0].name), self.acf.port("rateIn"))
+            if self.kf:
+                connectPorts(self.kf.port("rpy"), self.acf.port("rpyIn"))
+            if self.abc:
+                connectPorts(self.abc.port("basePosOut"), self.acf.port("posIn"))
 
     def activateComps(self):
         '''!@brief
@@ -716,6 +738,7 @@ class HrpsysConfigurator:
             ['el', "SoftErrorLimiter"],
             ['tl', "ThermoLimiter"],
             ['bp', "Beeper"],
+            ['acf', "AccelerationFilter"],
             ['log', "DataLogger"]
             ]
 
@@ -1206,7 +1229,7 @@ class HrpsysConfigurator:
             raise RuntimeError("need to specify joint name")
         if frame_name:
             lname = lname + ':' + frame_name
-        if self.fk_version < '315.2.5' and ':' in lname:
+        if StrictVersion(self.fk_version) < StrictVersion('315.2.5') and ':' in lname:
             raise RuntimeError('frame_name ('+lname+') is not supported')
         pose = self.fk_svc.getCurrentPose(lname)
         if not pose[0]:
@@ -1306,7 +1329,7 @@ class HrpsysConfigurator:
             raise RuntimeError("need to specify joint name")
         if frame_name:
             lname = lname + ':' + frame_name
-        if self.fk_version < '315.2.5' and ':' in lname:
+        if StrictVersion(self.fk_version) < StrictVersion('315.2.5') and ':' in lname:
             raise RuntimeError('frame_name ('+lname+') is not supported')
         pose = self.fk_svc.getReferencePose(lname)
         if not pose[0]:
@@ -2034,13 +2057,13 @@ dr=0, dp=0, dw=0, tm=10, wait=True):
         return self.ic_svc.stopImpedanceController(arm)
 
     def startImpedance(self, arm, **kwargs):
-        if self.hrpsys_version and self.hrpsys_version < '315.2.0':
+        if self.hrpsys_version and StrictVersion(self.hrpsys_version) < StrictVersion('315.2.0'):
             print(self.configurator_name + '\033[31mstartImpedance: Try to connect unsupported RTC' + str(self.hrpsys_version) + '\033[0m')
         else:
             self.startImpedance_315_4(arm, **kwargs)
 
     def stopImpedance(self, arm):
-        if self.hrpsys_version and self.hrpsys_version < '315.2.0':
+        if self.hrpsys_version and StrictVersion(self.hrpsys_version) < StrictVersion('315.2.0'):
             print(self.configurator_name + '\033[31mstopImpedance: Try to connect unsupported RTC' + str(self.hrpsys_version) + '\033[0m')
         else:
             self.stopImpedance_315_4(arm)
@@ -2090,6 +2113,23 @@ dr=0, dp=0, dw=0, tm=10, wait=True):
         @param overwrite_fs_idx : Index to be overwritten. overwrite_fs_idx is used only in walking.
         '''
         self.abc_svc.setFootStepsWithParam(footstep, stepparams, overwrite_fs_idx)
+
+    def clearJointAngles(self):
+        '''!@brief
+        Cancels the commanded sequence of joint angle, by overwriting the command by the values of instant the method was invoked.
+        Note that this only cancels the queue once. Icoming commands after this method is called will be processed as usual.
+        @return bool
+        '''
+        return self.seq_svc.clearJointAngles()
+
+    def clearJointAnglesOfGroup(self, gname):
+        '''!@brief
+        Cancels the commanded sequence of joint angle for the specified joint group, by overwriting the command by the values of instant the method was invoked.
+        Note that this only cancels the queue once. Icoming commands after this method is called will be processed as usual.
+        @param gname: Name of the joint group.
+        @return bool
+        '''
+        return self.seq_svc.clearJointAngles(gname)
 
     # ##
     # ## initialize

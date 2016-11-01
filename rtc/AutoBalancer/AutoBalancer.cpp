@@ -57,6 +57,7 @@ AutoBalancer::AutoBalancer(RTC::Manager* manager)
       m_basePoseOut("basePoseOut", m_basePose),
       m_accRefOut("accRef", m_accRef),
       m_contactStatesOut("contactStates", m_contactStates),
+      m_toeheelRatioOut("toeheelRatio", m_toeheelRatio),
       m_controlSwingSupportTimeOut("controlSwingSupportTime", m_controlSwingSupportTime),
       m_walkingStatesOut("walkingStates", m_walkingStates),
       m_sbpCogOffsetOut("sbpCogOffset", m_sbpCogOffset),
@@ -102,6 +103,7 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
     addOutPort("basePoseOut", m_basePoseOut);
     addOutPort("accRef", m_accRefOut);
     addOutPort("contactStates", m_contactStatesOut);
+    addOutPort("toeheelRatio", m_toeheelRatioOut);
     addOutPort("controlSwingSupportTime", m_controlSwingSupportTimeOut);
     addOutPort("cogOut", m_cogOut);
     addOutPort("walkingStates", m_walkingStatesOut);
@@ -202,6 +204,7 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
         contact_states_index_map.insert(std::pair<std::string, size_t>(ee_name, i));
       }
       m_contactStates.data.length(num);
+      m_toeheelRatio.data.length(num);
       if (ikp.find("rleg") != ikp.end() && ikp.find("lleg") != ikp.end()) {
         m_contactStates.data[contact_states_index_map["rleg"]] = true;
         m_contactStates.data[contact_states_index_map["lleg"]] = true;
@@ -212,6 +215,7 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
       }
       m_controlSwingSupportTime.data.length(num);
       for (size_t i = 0; i < num; i++) m_controlSwingSupportTime.data[i] = 0.0;
+      for (size_t i = 0; i < num; i++) m_toeheelRatio.data[i] = rats::no_using_toe_heel_ratio;
     }
     std::vector<hrp::Vector3> leg_pos;
     if (leg_offset_str.size() > 0) {
@@ -274,6 +278,12 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
     unsigned int npforce = m_robot->numSensors(hrp::Sensor::FORCE);
     unsigned int nvforce = m_vfs.size();
     unsigned int nforce  = npforce + nvforce;
+    // check number of force sensors
+    if (nforce < m_contactStates.data.length()) {
+        std::cerr << "[" << m_profile.instance_name << "] WARNING! This robot model has less force sensors(" << nforce;
+        std::cerr << ") than end-effector settings(" << m_contactStates.data.length() << ") !" << std::endl;
+    }
+
     m_ref_force.resize(nforce);
     m_ref_forceIn.resize(nforce);
     m_force.resize(nforce);
@@ -337,10 +347,14 @@ RTC::ReturnCode_t AutoBalancer::onInitialize()
     has_ik_failed = false;
     is_hand_fix_mode = false;
 
-    pos_ik_thre = 0.1*1e-3; // [m]
+    pos_ik_thre = 0.5*1e-3; // [m]
     rot_ik_thre = (1e-2)*M_PI/180.0; // [rad]
     ik_error_debug_print_freq = static_cast<int>(0.2/m_dt); // once per 0.2 [s]
 
+    hrp::Sensor* sen = m_robot->sensor<hrp::RateGyroSensor>("gyrometer");
+    if (sen == NULL) {
+        std::cerr << "[" << m_profile.instance_name << "] WARNING! This robot model has no GyroSensor named 'gyrometer'! " << std::endl;
+    }
     return RTC::RTC_OK;
 }
 
@@ -564,6 +578,8 @@ RTC::ReturnCode_t AutoBalancer::onExecute(RTC::UniqueId ec_id)
     m_contactStatesOut.write();
     m_controlSwingSupportTime.tm = m_qRef.tm;
     m_controlSwingSupportTimeOut.write();
+    m_toeheelRatio.tm = m_qRef.tm;
+    m_toeheelRatioOut.write();
     m_walkingStates.data = gg_is_walking;
     m_walkingStates.tm = m_qRef.tm;
     m_walkingStatesOut.write();
@@ -744,6 +760,18 @@ void AutoBalancer::getTargetParameters()
               m_limbCOPOffset[contact_states_index_map[sup_leg_nms.at(i)]].data.x = gg->get_support_foot_zmp_offsets().at(i)(0);
               m_limbCOPOffset[contact_states_index_map[sup_leg_nms.at(i)]].data.y = gg->get_support_foot_zmp_offsets().at(i)(1);
               m_limbCOPOffset[contact_states_index_map[sup_leg_nms.at(i)]].data.z = gg->get_support_foot_zmp_offsets().at(i)(2);
+          }
+      }
+      // Set toe heel ratio which can be used force moment distribution
+      {
+          std::map<leg_type, std::string> leg_type_map = gg->get_leg_type_map();
+          // for support leg
+          for (std::vector<step_node>::const_iterator it = gg->get_support_leg_steps().begin(); it != gg->get_support_leg_steps().end(); it++) {
+              m_toeheelRatio.data[contact_states_index_map[leg_type_map[it->l_r]]] = rats::no_using_toe_heel_ratio;
+          }
+          // for swing leg
+          for (std::vector<step_node>::const_iterator it = gg->get_swing_leg_steps().begin(); it != gg->get_swing_leg_steps().end(); it++) {
+              m_toeheelRatio.data[contact_states_index_map[leg_type_map[it->l_r]]] = gg->get_current_toe_heel_ratio();
           }
       }
     } else {
@@ -931,6 +959,15 @@ void AutoBalancer::getTargetParameters()
       ref_zmp(1) = ref_cog(1);
       ref_zmp(2) = tmp_foot_mid_pos(2);
     }
+  } else { // MODE_IDLE
+      // Update fix_leg_coords based on input basePos and rot if MODE_IDLE
+      std::vector<coordinates> tmp_end_coords_list;
+      for ( std::map<std::string, ABCIKparam>::iterator it = ikp.begin(); it != ikp.end(); it++ ) {
+          if ( std::find(leg_names.begin(), leg_names.end(), it->first) != leg_names.end() ) {
+              tmp_end_coords_list.push_back(coordinates(it->second.target_link->p+it->second.target_link->R*it->second.localPos, it->second.target_link->R*it->second.localR));
+          }
+      }
+      multi_mid_coords(fix_leg_coords, tmp_end_coords_list);
   }
 };
 
@@ -1448,6 +1485,7 @@ bool AutoBalancer::setGaitGeneratorParam(const OpenHRP::AutoBalancerService::Gai
   gg->set_swing_trajectory_final_distance_weight(i_param.swing_trajectory_final_distance_weight);
   gg->set_swing_leg_take_off_vel(hrp::Vector3(i_param.swing_leg_take_off_vel[0], i_param.swing_leg_take_off_vel[1], i_param.swing_leg_take_off_vel[2]));
   gg->set_swing_leg_landing_vel(hrp::Vector3(i_param.swing_leg_landing_vel[0], i_param.swing_leg_landing_vel[1], i_param.swing_leg_landing_vel[2]));
+  gg->set_swing_trajectory_time_offset_xy2z(i_param.swing_trajectory_time_offset_xy2z);
   gg->set_stair_trajectory_way_point_offset(hrp::Vector3(i_param.stair_trajectory_way_point_offset[0], i_param.stair_trajectory_way_point_offset[1], i_param.stair_trajectory_way_point_offset[2]));
   gg->set_cycloid_delay_kick_point_offset(hrp::Vector3(i_param.cycloid_delay_kick_point_offset[0], i_param.cycloid_delay_kick_point_offset[1], i_param.cycloid_delay_kick_point_offset[2]));
   gg->set_gravitational_acceleration(i_param.gravitational_acceleration);
@@ -1457,11 +1495,14 @@ bool AutoBalancer::setGaitGeneratorParam(const OpenHRP::AutoBalancerService::Gai
   gg->set_heel_pos_offset_x(i_param.heel_pos_offset_x);
   gg->set_toe_zmp_offset_x(i_param.toe_zmp_offset_x);
   gg->set_heel_zmp_offset_x(i_param.heel_zmp_offset_x);
+  gg->set_toe_check_thre(i_param.toe_check_thre);
+  gg->set_heel_check_thre(i_param.heel_check_thre);
   std::vector<double> tmp_ratio(i_param.toe_heel_phase_ratio.get_buffer(), i_param.toe_heel_phase_ratio.get_buffer()+i_param.toe_heel_phase_ratio.length());
   std::cerr << "[" << m_profile.instance_name << "]   "; // for set_toe_heel_phase_ratio
   gg->set_toe_heel_phase_ratio(tmp_ratio);
   gg->set_use_toe_joint(i_param.use_toe_joint);
   gg->set_use_toe_heel_transition(i_param.use_toe_heel_transition);
+  gg->set_use_toe_heel_auto_set(i_param.use_toe_heel_auto_set);
   gg->set_zmp_weight_map(boost::assign::map_list_of<leg_type, double>(RLEG, i_param.zmp_weight_map[0])(LLEG, i_param.zmp_weight_map[1])(RARM, i_param.zmp_weight_map[2])(LARM, i_param.zmp_weight_map[3]));
   gg->set_optional_go_pos_finalize_footstep_num(i_param.optional_go_pos_finalize_footstep_num);
   gg->set_overwritable_footstep_index_offset(i_param.overwritable_footstep_index_offset);
@@ -1527,6 +1568,7 @@ bool AutoBalancer::getGaitGeneratorParam(OpenHRP::AutoBalancerService::GaitGener
   for (size_t i = 0; i < 3; i++) i_param.swing_leg_landing_vel[i] = tmpv(i);
   i_param.swing_trajectory_delay_time_offset = gg->get_swing_trajectory_delay_time_offset();
   i_param.swing_trajectory_final_distance_weight = gg->get_swing_trajectory_final_distance_weight();
+  i_param.swing_trajectory_time_offset_xy2z = gg->get_swing_trajectory_time_offset_xy2z();
   i_param.gravitational_acceleration = gg->get_gravitational_acceleration();
   i_param.toe_angle = gg->get_toe_angle();
   i_param.heel_angle = gg->get_heel_angle();
@@ -1534,11 +1576,14 @@ bool AutoBalancer::getGaitGeneratorParam(OpenHRP::AutoBalancerService::GaitGener
   i_param.heel_pos_offset_x = gg->get_heel_pos_offset_x();
   i_param.toe_zmp_offset_x = gg->get_toe_zmp_offset_x();
   i_param.heel_zmp_offset_x = gg->get_heel_zmp_offset_x();
+  i_param.toe_check_thre = gg->get_toe_check_thre();
+  i_param.heel_check_thre = gg->get_heel_check_thre();
   std::vector<double> ratio(gg->get_NUM_TH_PHASES(),0.0);
   gg->get_toe_heel_phase_ratio(ratio);
   for (int i = 0; i < gg->get_NUM_TH_PHASES(); i++) i_param.toe_heel_phase_ratio[i] = ratio[i];
   i_param.use_toe_joint = gg->get_use_toe_joint();
   i_param.use_toe_heel_transition = gg->get_use_toe_heel_transition();
+  i_param.use_toe_heel_auto_set = gg->get_use_toe_heel_auto_set();
   std::map<leg_type, double> tmp_zmp_weight_map = gg->get_zmp_weight_map();
   i_param.zmp_weight_map[0] = tmp_zmp_weight_map[RLEG];
   i_param.zmp_weight_map[1] = tmp_zmp_weight_map[LLEG];
