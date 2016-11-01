@@ -1,7 +1,8 @@
 /* -*- coding:utf-8-unix; mode:c++; -*- */
 
-#include "WrenchDistributor.h"
+#include "../SequencePlayer/interpolator.h"
 #include "PreviewController.h"
+#include "WrenchDistributor.h"
 
 using namespace hrp;
 using namespace rats;
@@ -39,6 +40,59 @@ struct __mtimer__ {
 
 #define mtimer(...) if(__mtimer__ __b__ = __mtimer__(__VA_ARGS__));else
 
+// walk
+void decide_contact_states(const size_t index, std::map<std::string, EndEffectorParam>& tmp_eeparam_map, std::map<std::string, EndEffectorParam>& eeparam_map)
+{
+    if ( index < 25 ) {
+        tmp_eeparam_map["rleg"] = eeparam_map["rleg"];
+        tmp_eeparam_map["lleg"] = eeparam_map["lleg"];
+    } else if ( index < 100 ){
+        tmp_eeparam_map["lleg"] = eeparam_map["lleg"];
+    } else if ( index < 150 ){
+        eeparam_map["rleg"].setEEParam(hrp::Vector3(0.15,-0.1,0.0), hrp::Matrix33::Identity());
+        tmp_eeparam_map["rleg"] = eeparam_map["rleg"];
+        tmp_eeparam_map["lleg"] = eeparam_map["lleg"];
+    } else if (index < 225 ){
+        tmp_eeparam_map["rleg"] = eeparam_map["rleg"];
+    } else {
+        eeparam_map["lleg"].setEEParam(hrp::Vector3(0.15,0.1,0.0), hrp::Matrix33::Identity());
+        tmp_eeparam_map["rleg"] = eeparam_map["rleg"];
+        tmp_eeparam_map["lleg"] = eeparam_map["lleg"];
+    }
+};
+
+// shuffle motion
+void decide_contact_states2(const double dt, const size_t index, std::map<std::string, EndEffectorParam>& tmp_eeparam_map, std::map<std::string, EndEffectorParam>& eeparam_map, interpolator* ip)
+{
+    double x,v,a;
+    static double start = 0.0, goal = 0.15, goalv = 0.0;
+    if ( index == 0 ){
+        ip->set(&start);
+        ip->setGoal(&goal, &goalv, 125*dt);
+        ip->get(&x, &v, &a, true);
+        eeparam_map["rleg"].move_vec = hrp::Vector3(1,0,0);
+        eeparam_map["rleg"].setEEParam(hrp::Vector3(x,-0.1,0.0), hrp::Matrix33::Identity());
+    } else if ( index < 125 ) {
+        ip->get(&x, &v, &a, true);
+        eeparam_map["rleg"].move_vec = hrp::Vector3(1,0,0);
+        eeparam_map["rleg"].setEEParam(hrp::Vector3(x,-0.1,0.0), hrp::Matrix33::Identity());
+    } else if ( index == 125 ) {
+        ip->set(&start);
+        ip->setGoal(&goal, &goalv, 125*dt);
+        ip->get(&x, &v, &a, true);
+        eeparam_map["rleg"].move_vec = hrp::Vector3(0,0,0);
+        eeparam_map["rleg"].setEEParam(hrp::Vector3(goal,-0.1,0.0), hrp::Matrix33::Identity());
+        eeparam_map["lleg"].move_vec = hrp::Vector3(1,0,0);
+        eeparam_map["lleg"].setEEParam(hrp::Vector3(x,0.1,0.0), hrp::Matrix33::Identity());
+    } else {
+        ip->get(&x, &v, &a, true);
+        eeparam_map["lleg"].move_vec = hrp::Vector3(1,0,0);
+        eeparam_map["lleg"].setEEParam(hrp::Vector3(x,0.1,0.0), hrp::Matrix33::Identity());
+    }
+    tmp_eeparam_map["rleg"] = eeparam_map["rleg"];
+    tmp_eeparam_map["lleg"] = eeparam_map["lleg"];
+};
+
 int main(int argc, char* argv[])
 {
     //
@@ -72,6 +126,7 @@ int main(int argc, char* argv[])
         ref_zmp_list.push(v);
     }
     //
+    interpolator* ip = new interpolator(1, dt, interpolator::HOFFARBIB);
     preview_dynamics_filter<extended_preview_control> df(dt, z_c, ref_zmp_list.front());
     std::string fname("/tmp/plot.dat");
     FILE* fp = fopen(fname.c_str(), "w");
@@ -100,23 +155,8 @@ int main(int argc, char* argv[])
             hrp::Vector3 com_pos = hrp::Vector3(x[0],x[1],0.8);
             hrp::Vector3 ref_linear_momentum_rate = mass * hrp::Vector3(omega2*(x[0]-cart_zmp[0]),omega2*(x[1]-cart_zmp[1]),0);
             hrp::Vector3 ref_angular_momentum_rate = hrp::Vector3(0,0,0);
-            //// contact states
-            if ( index < 25 ) {
-                tmp_eeparam_map["rleg"] = eeparam_map["rleg"];
-                tmp_eeparam_map["lleg"] = eeparam_map["lleg"];
-            } else if ( index < 100 ){
-                tmp_eeparam_map["lleg"] = eeparam_map["lleg"];
-            } else if ( index < 150 ){
-                eeparam_map["rleg"].setEEParam(hrp::Vector3(0.15,-0.1,0.0), hrp::Matrix33::Identity());
-                tmp_eeparam_map["rleg"] = eeparam_map["rleg"];
-                tmp_eeparam_map["lleg"] = eeparam_map["lleg"];
-            } else if (index < 225 ){
-                tmp_eeparam_map["rleg"] = eeparam_map["rleg"];
-            } else {
-                eeparam_map["lleg"].setEEParam(hrp::Vector3(0.15,0.1,0.0), hrp::Matrix33::Identity());
-                tmp_eeparam_map["rleg"] = eeparam_map["rleg"];
-                tmp_eeparam_map["lleg"] = eeparam_map["lleg"];
-            }
+            // decide_contact_states(index, tmp_eeparam_map, eeparam_map);
+            decide_contact_states2(dt, index, tmp_eeparam_map, eeparam_map, ip);
             mtimer("time"){
                 wd.DistributeWrench(com_pos, ref_linear_momentum_rate, ref_angular_momentum_rate, tmp_eeparam_map);
             }

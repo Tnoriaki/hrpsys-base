@@ -13,7 +13,7 @@ target_link_libraries(testPreviewController ${libs})
 add_executable(testGaitGenerator testGaitGenerator.cpp ../ImpedanceController/RatsMatrix.cpp PreviewController.cpp GaitGenerator.cpp ../SequencePlayer/interpolator.cpp)
 target_link_libraries(testGaitGenerator ${libs})
 
-add_executable(testWrenchDistributor testWrenchDistributor.cpp WrenchDistributor.cpp PreviewController.cpp)
+add_executable(testWrenchDistributor testWrenchDistributor.cpp WrenchDistributor.cpp PreviewController.cpp ../SequencePlayer/interpolator.cpp)
 target_link_libraries(testWrenchDistributor ${libs})
 
 add_executable(AutoBalancerComp AutoBalancerComp.cpp ${comp_sources})
