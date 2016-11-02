@@ -15,6 +15,7 @@
 #include <hrpModel/JointPath.h>
 #include <hrpUtil/MatrixSolvers.h>
 #include "hrpsys/util/Hrpsys.h"
+#include "WrenchDistributor.h"
 
 
 typedef coil::Guard<coil::Mutex> Guard;
