@@ -15,7 +15,6 @@
 #include <hrpModel/JointPath.h>
 #include <hrpUtil/MatrixSolvers.h>
 #include "hrpsys/util/Hrpsys.h"
-#include "WrenchDistributor.h"
 
 
 typedef coil::Guard<coil::Mutex> Guard;
@@ -702,47 +701,43 @@ void AutoBalancer::getTargetParameters()
               m_controlSwingSupportTime.data[contact_states_index_map[it->first]] = gg->get_current_swing_time(dst->first);
           }
       }
-      // set ref_forces
+      // set ref forces
       {
-          size_t kick_leg_index(contact_states_index_map[gg->get_swing_leg_names().front()]);
-          size_t support_leg_index(contact_states_index_map[gg->get_support_leg_names().front()]);
-          std::vector<hrp::Vector3> ee_pos;
-          for (size_t i = 0 ; i < leg_names.size(); i++) {
-              ABCIKparam& tmpikp = ikp[leg_names[i]];
-              ee_pos.push_back(tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[i]);
-          }
-          // double alpha = (ref_zmp - ee_pos[1]).norm() / ((ee_pos[0] - ref_zmp).norm() + (ee_pos[1] - ref_zmp).norm());
-          double alpha = (ref_zmp - ee_pos[kick_leg_index]).norm() / (ee_pos[support_leg_index] - ee_pos[kick_leg_index]).norm();
-          if (alpha>1.0) alpha = 1.0;
-          if (alpha<0.0) alpha = 0.0;
-          if (DEBUGP) {
-          std::cerr << "[" << m_profile.instance_name << "] alpha:" << alpha << std::endl;
-          }
-          double M = m_robot->totalMass();
-          double G = gg->get_gravitational_acceleration();
-          hrp::Vector3 cog_acc = gg->get_cog_acc();
-          m_force[support_leg_index].data[0] = alpha * M * cog_acc(0);
-          m_force[support_leg_index].data[1] = alpha * M * cog_acc(1);
-          m_force[support_leg_index].data[2] = alpha * M * (cog_acc(2)+G);
-          m_force[kick_leg_index].data[0] = (1-alpha) * M * cog_acc(0);
-          m_force[kick_leg_index].data[1] = (1-alpha) * M * cog_acc(1);
-          m_force[kick_leg_index].data[2] = (1-alpha) * M * (cog_acc(2)+G);
-
-          if(gg->get_skate_acc()(0) != 0){
-              // Modify Fx for rolling friction
-              m_force[support_leg_index].data[0] = - m_force[support_leg_index].data[2] * mu_rolling;
-              m_force[kick_leg_index].data[0] = - M * gg->get_skate_acc()(0) + m_force[support_leg_index].data[2] * mu_rolling;
-              // Modify Fz for maximum static friction force
-              double min_normal_force;
-              for (size_t i = 0; i < leg_names.size(); i++){
-                  min_normal_force = std::sqrt(std::pow(m_force[i].data[0],2) + std::pow(m_force[i].data[1],2)) / mu ;
-                  if ( m_force[i].data[2] < min_normal_force ){
-                      m_force[i].data[2] = min_normal_force;
-                      m_force[(i+1)%2].data[2] = M*G - min_normal_force;
-                      m_force[support_leg_index].data[0] = - m_force[support_leg_index].data[2] * mu_rolling;
-                      m_force[kick_leg_index].data[0] = - M * gg->get_skate_acc()(0) + m_force[support_leg_index].data[2] * mu_rolling;
+          wrench_distributor = new WrenchDistributor(m_robot->totalMass(), gg->get_gravitational_acceleration());
+          std::map<std::string, EndEffectorParam> eeparam_map;
+          std::vector<std::string> support_leg_names = gg->get_support_leg_names();
+          std::vector<std::string> swing_leg_names = gg->get_swing_leg_names();
+          hrp::Vector3 ref_cog_acc(gg->get_cog());
+          hrp::Vector3 ref_cog_angular_acc(hrp::Vector3::Zero()); // TODO
+          for (std::vector<std::string>::const_iterator it = leg_names.begin(); it != leg_names.end(); it++) {
+              ABCIKparam& tmpikp = ikp[*it];
+              hrp::Vector3 tmp_ee_pos = tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[contact_states_index_map[*it]];
+              EndEffectorParam tmp_eeparam(tmp_ee_pos, hrp::Matrix33::Identity()); // TODO
+              if ( gg->get_skate_acc()(0) == 0 ){ // default
+                  if (m_contactStates.data[contact_states_index_map[*it]])
+                      eeparam_map.insert(std::pair<std::string, EndEffectorParam>(*it, tmp_eeparam));
+                  else
+                      for (size_t j = 0; j < 6; j++)
+                          m_force[contact_states_index_map[*it]].data[j] = 0;
+              } else{ // skate acc
+                  ref_cog_acc(0) = ref_cog_acc(0) - gg->get_skate_acc()(0);
+                  if ( support_leg_names.front() == *it ){ // TODO
+                      tmp_eeparam.move_vec = hrp::Vector3(1,0,0);
+                      tmp_eeparam.mu_vec = hrp::Vector3(mu,mu_rolling,mu*0.05);
                   }
+                  eeparam_map.insert(std::pair<std::string, EndEffectorParam>(*it, tmp_eeparam));
               }
+          }
+          wrench_distributor->DistributeWrench(gg->get_cog(), m_robot->totalMass()*ref_cog_acc, ref_cog_angular_acc, eeparam_map);
+          for ( std::map<std::string, EndEffectorParam>::iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ )
+              for (size_t j = 0; j < 6; j++)
+                  m_force[contact_states_index_map[it->first]].data[j] = it->second.wrench(j);
+          if ( DEBUGP ) {
+              std::cerr << "------------" << std::endl;
+              std::cerr << "rleg wrench" << std::endl;
+              std::cerr << m_force[0].data[0] << ", " <<m_force[0].data[1] << ", " <<m_force[0].data[2] << ", " <<m_force[0].data[3] << ", " <<m_force[0].data[4] << ", " <<m_force[0].data[5] << std::endl;;
+              std::cerr << "lleg wrench" << std::endl;
+              std::cerr << m_force[1].data[0] << ", " <<m_force[1].data[1] << ", " <<m_force[1].data[2] << ", " <<m_force[1].data[3] << ", " <<m_force[1].data[4] << ", " <<m_force[1].data[5] << std::endl;;
           }
       }
       // set limbCOPOffset

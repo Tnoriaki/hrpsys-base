@@ -27,6 +27,7 @@
 // <rtc-template block="service_impl_h">
 #include "AutoBalancerService_impl.h"
 #include "interpolator.h"
+#include "WrenchDistributor.h"
 
 // </rtc-template>
 
@@ -264,6 +265,8 @@ class AutoBalancer
   hrp::Vector3 graspless_manip_p_gain;
   rats::coordinates graspless_manip_reference_trans_coords;
   double pos_ik_thre, rot_ik_thre;
+  // wrench distributor
+  WrenchDistributor *wrench_distributor;
 };
 
 
