@@ -100,7 +100,7 @@ void WrenchDistributor::calcEvaluationFunctionMatrix(const std::map<std::string,
     size_t Phirows = 6 + states_dim;
     size_t Phicols = states_dim;
     hrp::dmatrix Wmat(hrp::dmatrix::Zero(Phirows, Phirows));
-    hrp::dmatrix Ximat(hrp::dmatrix::Zero(Phirows, 1));
+    Ximat = hrp::dmatrix::Zero(Phirows, 1);
     Phimat = hrp::dmatrix::Zero(Phirows, Phicols);
     Wmat = weight_vector.asDiagonal();
     Ximat.block(0,0,3,1) = ref_linear_momentum_rate + hrp::Vector3(0,0,mass*gravitational_acceleration);
@@ -119,13 +119,14 @@ void WrenchDistributor::calcEvaluationFunctionMatrix(const std::map<std::string,
 
 void WrenchDistributor::solveWrenchQP ()
 {
+    size_t e_dim = 0;
     real_t* H = new real_t[states_dim*states_dim];
     real_t* g = new real_t[states_dim];
-    real_t* A = new real_t[constraints_dim*states_dim];
+    real_t* A = new real_t[(constraints_dim+e_dim)*states_dim];
     real_t* lb = new real_t[states_dim];
     real_t* ub = new real_t[states_dim];
-    real_t* lbA = new real_t[constraints_dim];
-    real_t* ubA = new real_t[constraints_dim];
+    real_t* lbA = new real_t[constraints_dim+e_dim];
+    real_t* ubA = new real_t[constraints_dim+e_dim];
     for (size_t i = 0; i < states_dim; i++) {
         for (size_t j = 0; j < states_dim; j++) {
             H[i*states_dim+j] = Hmat(i,j);
@@ -141,12 +142,24 @@ void WrenchDistributor::solveWrenchQP ()
         lbA[i] = 0;
         ubA[i] = 1e10;
     }
-    QProblem example( states_dim, constraints_dim );
+    for (size_t i = 0; i < e_dim; i++){
+        size_t index = i + constraints_dim;
+        for (size_t j = 0; j < states_dim; j++){
+            A[index*states_dim+j] = Phimat(i,j);
+        }
+        lbA[index] = Ximat(i);
+        ubA[index] = Ximat(i);
+    }
+    QProblem example( states_dim, constraints_dim + e_dim );
+    //
     Options options;
     options.printLevel = PL_LOW;
+    options.initialStatusBounds = ST_INACTIVE;
+    options.numRefinementSteps = 1;
+    options.enableCholeskyRefactorisation = 1;
+    //
     example.setOptions( options );
-    // /* Solve first QP. */
-    int nWSR = 1e2;
+    int nWSR = 100;
     example.init(H,g,A,lb,ub,lbA,ubA,nWSR);
     real_t* xOpt = new real_t[states_dim];
     example.getPrimalSolution( xOpt );

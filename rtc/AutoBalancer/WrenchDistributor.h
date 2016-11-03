@@ -97,6 +97,7 @@ class WrenchDistributor : public EndEffectorParam
     hrp::dmatrix gvec;
     hrp::dmatrix Amat;
     hrp::dmatrix Phimat;
+    hrp::dmatrix Ximat;
     hrp::Vector3 ref_cog;
     hrp::Vector3 ref_linear_momentum_rate;
     hrp::Vector3 ref_angular_momentum_rate;
