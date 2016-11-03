@@ -40,13 +40,13 @@ class EndEffectorParam
     EndEffectorParam() : state_dim(6), c_dim(0), weight(1), e_vec(hrp::Vector3(0,0,1)), mu_vec(hrp::Vector3(0.3,0.1,0.03)), move_vec(hrp::Vector3(0,0,0)) {
         support_polygon_vec.resize(4);
         support_polygon_vec << 0.1,0.1,0.05,0.05;
-        wrench = hrp::dvector::Zero(state_dim);
+        wrench = hrp::dvector::Zero(6);
     };
     EndEffectorParam(const size_t _state_dim) : state_dim(_state_dim), c_dim(0), weight(1),
                                                 e_vec(hrp::Vector3(0,0,1)), mu_vec(hrp::Vector3(0.3,0.1,0.03)), move_vec(hrp::Vector3(0,0,0)) {
         support_polygon_vec.resize(4);
         support_polygon_vec << 0.1,0.1,0.05,0.05;
-        wrench = hrp::dvector::Zero(state_dim);
+        wrench = hrp::dvector::Zero(6);
     };
     EndEffectorParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot) : state_dim(6), c_dim(0), weight(1),
                                                                                   pos(_pos), rot(_rot),
@@ -55,7 +55,7 @@ class EndEffectorParam
     {
         support_polygon_vec.resize(4);
         support_polygon_vec << 0.1,0.1,0.05,0.05;
-        wrench = hrp::dvector::Zero(state_dim);
+        wrench = hrp::dvector::Zero(6);
     };
     EndEffectorParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot, const size_t _state_dim) : state_dim(_state_dim), c_dim(0), weight(1),
                                                                                                            pos(_pos), rot(_rot),
@@ -64,7 +64,7 @@ class EndEffectorParam
     {
         support_polygon_vec.resize(4);
         support_polygon_vec << 0.1,0.1,0.05,0.05;
-        wrench = hrp::dvector::Zero(state_dim);
+        wrench = hrp::dvector::Zero(6);
     };
     void setEEParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot, const double _weight = 1.0){
         pos = _pos;
@@ -115,10 +115,10 @@ class WrenchDistributor : public EndEffectorParam
         calcEvaluationFunctionMatrix(_eeparam_map);
         solveWrenchQP();
         calcMomentumRate();
-        size_t count = 0;
+        size_t index = 0;
         for ( std::map<std::string, EndEffectorParam>::iterator it = _eeparam_map.begin(); it != _eeparam_map.end(); it++ ){
-            it->second.wrench = wrenches.segment(state_dim * count, state_dim);
-            count ++;
+            it->second.wrench.segment(0,it->second.state_dim) = wrenches.segment(index, it->second.state_dim);
+            index += it->second.state_dim;
         }
     }
     void calcAugmentedConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map);

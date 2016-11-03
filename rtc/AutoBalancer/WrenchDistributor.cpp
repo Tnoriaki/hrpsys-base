@@ -34,8 +34,8 @@ void EndEffectorParam::calcFrictionConstraintsMatrix(hrp::dmatrix& C)
 void EndEffectorParam::calcMomentumConstraintsMatrix(hrp::dmatrix& C)
 {
     // spv = (dx+,dx-,dy+,dy-)
-    C = hrp::dmatrix::Zero(6 ,state_dim);
     if ( state_dim == 6 ){ // TODO (line contact)
+        C = hrp::dmatrix::Zero(6 ,state_dim);
         // Support Polygon Constraints (taux, tauy)
         C.block(0,0,4,state_dim) <<
             0,0,support_polygon_vec(2),-1,0,0,
@@ -46,6 +46,8 @@ void EndEffectorParam::calcMomentumConstraintsMatrix(hrp::dmatrix& C)
         C.block(4,0,2,state_dim) <<
             0,0,mu_vec(2),0,0,1,
             0,0,mu_vec(2),0,0,-1;
+    } else {
+        C.resize(0,0); // TODO
     }
 }
 
@@ -62,11 +64,12 @@ void EndEffectorParam::calcConstraintsMatrix()
     Cmat = hrp::dmatrix::Zero(c_dim, state_dim);
     Cmat.block(0,0,cs_dim,state_dim) = C_state;
     Cmat.block(cs_dim,0,cf_dim,state_dim) = C_friction;
-    Cmat.block(cs_dim+cf_dim,0,cm_dim,state_dim) = C_moment;
-        // World Frame => Local Frame
-        hrp::dmatrix Rmat(hrp::dmatrix::Zero(state_dim, state_dim));
-        Rmat.block(0,0,3,3) = Rmat.block(3,3,3,3) = rot;
-        Cmat = Cmat * Rmat;
+    if (state_dim == 6) Cmat.block(cs_dim+cf_dim,0,cm_dim,state_dim) = C_moment;
+    // Local Frame => World Frame
+    hrp::dmatrix Rmat(hrp::dmatrix::Zero(state_dim, state_dim));
+    Rmat.block(0,0,3,3) = rot;
+    if (state_dim == 6) Rmat.block(3,3,3,3) = rot; //TODO
+    Cmat = Cmat * Rmat;
 }
 
 void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map)
@@ -82,13 +85,13 @@ void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, End
     weight_vector.head(6) = 1e5*hrp::dvector::Ones(6);
     Amat = hrp::dmatrix::Zero(constraints_dim, states_dim);
     size_t current_dim = 0;
-    size_t count = 0;
+    size_t index = 0;
     for ( std::map<std::string, EndEffectorParam>::iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
-        weight_vector.segment( 6 + it->second.state_dim * count , it->second.state_dim ) << 1e-5, 1e-5, 1e-5, 1,1, 1;
-        weight_vector.segment( 6 + it->second.state_dim * count , it->second.state_dim ) *= it->second.weight;
-        Amat.block(current_dim, count*state_dim, it->second.c_dim, state_dim) = it->second.Cmat;
+        weight_vector.segment( 6 + index , 3 ) << 1e-5, 1e-5, 1e-5;
+        weight_vector.segment( 6 + index , it->second.state_dim ) *= it->second.weight;
+        Amat.block(current_dim, index, it->second.c_dim, it->second.state_dim) = it->second.Cmat;
         current_dim += it->second.c_dim;
-        count ++;
+        index += it->second.state_dim;
     }
 }
 
@@ -102,12 +105,12 @@ void WrenchDistributor::calcEvaluationFunctionMatrix(const std::map<std::string,
     Wmat = weight_vector.asDiagonal();
     Ximat.block(0,0,3,1) = ref_linear_momentum_rate + hrp::Vector3(0,0,mass*gravitational_acceleration);
     Ximat.block(3,0,3,1) = ref_angular_momentum_rate;
-    size_t count = 0;
+    size_t index = 0;
     for ( std::map<std::string, EndEffectorParam>::const_iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
-        Phimat.block(0, state_dim * count,3,3) = hrp::dmatrix::Identity(3,3);
-        Phimat.block(3, state_dim * count, 3,3) << hrp::hat(it->second.pos - ref_cog);
-        Phimat.block(3,state_dim * count+3,3,3) = hrp::dmatrix::Identity(3,3);
-        count ++;
+        Phimat.block(0, index, 3,3) = hrp::dmatrix::Identity(3,3);
+        Phimat.block(3, index, 3,3) << hrp::hat(it->second.pos - ref_cog);
+        if ( state_dim == 6 ) Phimat.block(3, index + 3,3, 3) = hrp::dmatrix::Identity(3,3); // TODO
+        index += it->second.state_dim;
     }
     Phimat.block(6,0,Phirows-6,Phicols) = hrp::dmatrix::Identity(Phirows-6,Phicols);
     Hmat = Phimat.transpose()*Wmat*Phimat;
@@ -128,30 +131,29 @@ void WrenchDistributor::solveWrenchQP ()
             H[i*states_dim+j] = Hmat(i,j);
         }
         g[i] = gvec(i);
-        lb[i] = -1e4;
-        ub[i] = 1e4;
+        lb[i] = -1e10;
+        ub[i] = 1e10;
     }
     for (size_t i = 0; i < constraints_dim; i++) {
         for (size_t j = 0; j < states_dim; j++){
             A[i*states_dim+j] = Amat(i,j);
         }
         lbA[i] = 0;
-        ubA[i] = 1e4;
+        ubA[i] = 1e10;
     }
-    SQProblem example( states_dim, constraints_dim );
+    QProblem example( states_dim, constraints_dim );
     Options options;
     options.printLevel = PL_LOW;
     example.setOptions( options );
     // /* Solve first QP. */
-    int nWSR = 1e5;
+    int nWSR = 1e2;
     example.init(H,g,A,lb,ub,lbA,ubA,nWSR);
     real_t* xOpt = new real_t[states_dim];
     example.getPrimalSolution( xOpt );
     size_t count = 0;
     wrenches.resize(states_dim);
-    for ( size_t i = 0; i < ee_num; i++ )
-        for ( size_t j = 0; j < state_dim; j ++)
-            wrenches(i*state_dim+j) = xOpt[i*state_dim+j];
+    for ( size_t i = 0; i < states_dim; i++ )
+        wrenches(i) = xOpt[i];
     delete[] H;
     delete[] g;
     delete[] A;
