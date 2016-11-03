@@ -106,7 +106,6 @@ class WrenchDistributor : public EndEffectorParam
     WrenchDistributor(const double _mass, const double _gravitational_acceleration)
         : mass(_mass), gravitational_acceleration(_gravitational_acceleration)
     {};
-    // void calcResultantConstraintsMatrix(hrp::dmatrix& C); // for object (skateboard, kickboard, ...)
     void DistributeWrench(const hrp::Vector3& _ref_cog, const hrp::Vector3& _ref_linear_momentum_rate, const hrp::Vector3& _ref_angular_momentum_rate, std::map<std::string, EndEffectorParam>& _eeparam_map){
         ee_num = _eeparam_map.size();
         ref_cog = _ref_cog;

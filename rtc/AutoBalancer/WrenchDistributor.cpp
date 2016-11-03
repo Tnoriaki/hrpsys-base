@@ -105,10 +105,7 @@ void WrenchDistributor::calcEvaluationFunctionMatrix(const std::map<std::string,
     size_t count = 0;
     for ( std::map<std::string, EndEffectorParam>::const_iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
         Phimat.block(0, state_dim * count,3,3) = hrp::dmatrix::Identity(3,3);
-        Phimat.block(3,state_dim * count,3,3) <<
-                0,-(it->second.pos(2)-ref_cog(2)),(it->second.pos(1)-ref_cog(1)),
-                (it->second.pos(2)-ref_cog(2)),0,-(it->second.pos(0)-ref_cog(0)),
-            -(it->second.pos(1)-ref_cog(1)),(it->second.pos(0)-ref_cog(0)),0;
+        Phimat.block(3, state_dim * count, 3,3) << hrp::hat(it->second.pos - ref_cog);
         Phimat.block(3,state_dim * count+3,3,3) = hrp::dmatrix::Identity(3,3);
         count ++;
     }
