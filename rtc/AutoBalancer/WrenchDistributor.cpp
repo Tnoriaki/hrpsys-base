@@ -168,7 +168,7 @@ void WrenchDistributor::solveWrenchQP ()
 void WrenchDistributor::calcMomentumRate ()
 {
     linear_momentum_rate = (Phimat * wrenches).segment(0,3) - hrp::Vector3(0,0,mass * gravitational_acceleration);
-    angular_momentum_rate = (Phimat * wrenches).segment(3,6);
+    angular_momentum_rate = (Phimat * wrenches).segment(3,3);
 }
 
 void WrenchDistributor::printResult (const std::map<std::string, EndEffectorParam>& eeparam_map)
