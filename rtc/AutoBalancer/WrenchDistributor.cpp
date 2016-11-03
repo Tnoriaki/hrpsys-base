@@ -65,7 +65,7 @@ void EndEffectorParam::calcConstraintsMatrix()
     Cmat.block(cs_dim+cf_dim,0,cm_dim,state_dim) = C_moment;
         // World Frame => Local Frame
         hrp::dmatrix Rmat(hrp::dmatrix::Zero(state_dim, state_dim));
-        Rmat.block(0,0,3,3) = Rmat.block(3,3,3,3) = ee_rot;
+        Rmat.block(0,0,3,3) = Rmat.block(3,3,3,3) = rot;
         Cmat = Cmat * Rmat;
 }
 
@@ -106,9 +106,9 @@ void WrenchDistributor::calcEvaluationFunctionMatrix(const std::map<std::string,
     for ( std::map<std::string, EndEffectorParam>::const_iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
         Phimat.block(0, state_dim * count,3,3) = hrp::dmatrix::Identity(3,3);
         Phimat.block(3,state_dim * count,3,3) <<
-                0,-(it->second.ee_pos(2)-ref_cog(2)),(it->second.ee_pos(1)-ref_cog(1)),
-                (it->second.ee_pos(2)-ref_cog(2)),0,-(it->second.ee_pos(0)-ref_cog(0)),
-            -(it->second.ee_pos(1)-ref_cog(1)),(it->second.ee_pos(0)-ref_cog(0)),0;
+                0,-(it->second.pos(2)-ref_cog(2)),(it->second.pos(1)-ref_cog(1)),
+                (it->second.pos(2)-ref_cog(2)),0,-(it->second.pos(0)-ref_cog(0)),
+            -(it->second.pos(1)-ref_cog(1)),(it->second.pos(0)-ref_cog(0)),0;
         Phimat.block(3,state_dim * count+3,3,3) = hrp::dmatrix::Identity(3,3);
         count ++;
     }
