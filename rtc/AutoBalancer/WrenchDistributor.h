@@ -29,8 +29,8 @@ class EndEffectorParam
     size_t state_dim;
     size_t c_dim;
     double weight; // standard 1
-    hrp::Vector3 ee_pos;
-    hrp::Matrix33 ee_rot;
+    hrp::Vector3 pos;
+    hrp::Matrix33 rot;
     hrp::Vector3 e_vec; // selection vector (0,0,1,0,0,0) => unilateral / selection vector (0,0,0,0,0,0) => attached
     hrp::Vector3 mu_vec; // (mu_s, mu_k, mu_r)
     hrp::Vector3 move_vec; // ex) fix : (0,0,0) / sliding : (1 0 0),(0.5,0.5),(0,1,0) / float (0,0,1),(1,1,1)...
@@ -40,35 +40,35 @@ class EndEffectorParam
     EndEffectorParam() : state_dim(6), c_dim(0), weight(1), e_vec(hrp::Vector3(0,0,1)), mu_vec(hrp::Vector3(0.3,0.1,0.03)), move_vec(hrp::Vector3(0,0,0)) {
         support_polygon_vec.resize(4);
         support_polygon_vec << 0.1,0.1,0.05,0.05;
-        wrench = hrp::dvector::Zero(state_dim);
+        wrench = hrp::dvector::Zero(6);
     };
     EndEffectorParam(const size_t _state_dim) : state_dim(_state_dim), c_dim(0), weight(1),
                                                 e_vec(hrp::Vector3(0,0,1)), mu_vec(hrp::Vector3(0.3,0.1,0.03)), move_vec(hrp::Vector3(0,0,0)) {
         support_polygon_vec.resize(4);
         support_polygon_vec << 0.1,0.1,0.05,0.05;
-        wrench = hrp::dvector::Zero(state_dim);
+        wrench = hrp::dvector::Zero(6);
     };
-    EndEffectorParam(const hrp::Vector3& _ee_pos, const hrp::Matrix33& _ee_rot) : state_dim(6), c_dim(0), weight(1),
-                                                                                  ee_pos(_ee_pos), ee_rot(_ee_rot),
+    EndEffectorParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot) : state_dim(6), c_dim(0), weight(1),
+                                                                                  pos(_pos), rot(_rot),
                                                                                   e_vec(hrp::Vector3(0,0,1)), mu_vec(hrp::Vector3(0.3,0.1,0.03)),
                                                                                   move_vec(hrp::Vector3(0,0,0))
     {
         support_polygon_vec.resize(4);
         support_polygon_vec << 0.1,0.1,0.05,0.05;
-        wrench = hrp::dvector::Zero(state_dim);
+        wrench = hrp::dvector::Zero(6);
     };
-    EndEffectorParam(const hrp::Vector3& _ee_pos, const hrp::Matrix33& _ee_rot, const size_t _state_dim) : state_dim(_state_dim), c_dim(0), weight(1),
-                                                                                                           ee_pos(_ee_pos), ee_rot(_ee_rot),
+    EndEffectorParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot, const size_t _state_dim) : state_dim(_state_dim), c_dim(0), weight(1),
+                                                                                                           pos(_pos), rot(_rot),
                                                                                                            e_vec(hrp::Vector3(0,0,1)), mu_vec(hrp::Vector3(0.3,0.1,0.03)),
                                                                                                            move_vec(hrp::Vector3(0,0,0))
     {
         support_polygon_vec.resize(4);
         support_polygon_vec << 0.1,0.1,0.05,0.05;
-        wrench = hrp::dvector::Zero(state_dim);
+        wrench = hrp::dvector::Zero(6);
     };
-    void setEEParam(const hrp::Vector3& _ee_pos, const hrp::Matrix33& _ee_rot, const double _weight = 1.0){
-        ee_pos = _ee_pos;
-        ee_rot = _ee_rot;
+    void setEEParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot, const double _weight = 1.0){
+        pos = _pos;
+        rot = _rot;
         weight = _weight;
     }
     void setCCParam(const hrp::Vector3& _e_vec, const hrp::Vector3& _mu_vec, const hrp::dvector _support_polygon_vec){
@@ -81,7 +81,6 @@ class EndEffectorParam
     void calcMomentumConstraintsMatrix(hrp::dmatrix& C);
     void calcConstraintsMatrix();
 };
-
 
 class WrenchDistributor : public EndEffectorParam
 {
@@ -98,6 +97,7 @@ class WrenchDistributor : public EndEffectorParam
     hrp::dmatrix gvec;
     hrp::dmatrix Amat;
     hrp::dmatrix Phimat;
+    hrp::dmatrix Ximat;
     hrp::Vector3 ref_cog;
     hrp::Vector3 ref_linear_momentum_rate;
     hrp::Vector3 ref_angular_momentum_rate;
@@ -107,7 +107,6 @@ class WrenchDistributor : public EndEffectorParam
     WrenchDistributor(const double _mass, const double _gravitational_acceleration)
         : mass(_mass), gravitational_acceleration(_gravitational_acceleration)
     {};
-    // void calcResultantConstraintsMatrix(hrp::dmatrix& C); // for object (skateboard, kickboard, ...)
     void DistributeWrench(const hrp::Vector3& _ref_cog, const hrp::Vector3& _ref_linear_momentum_rate, const hrp::Vector3& _ref_angular_momentum_rate, std::map<std::string, EndEffectorParam>& _eeparam_map){
         ee_num = _eeparam_map.size();
         ref_cog = _ref_cog;
@@ -117,10 +116,10 @@ class WrenchDistributor : public EndEffectorParam
         calcEvaluationFunctionMatrix(_eeparam_map);
         solveWrenchQP();
         calcMomentumRate();
-        size_t count = 0;
+        size_t index = 0;
         for ( std::map<std::string, EndEffectorParam>::iterator it = _eeparam_map.begin(); it != _eeparam_map.end(); it++ ){
-            it->second.wrench = wrenches.segment(state_dim * count, state_dim);
-            count ++;
+            it->second.wrench.segment(0,it->second.state_dim) = wrenches.segment(index, it->second.state_dim);
+            index += it->second.state_dim;
         }
     }
     void calcAugmentedConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map);

@@ -137,8 +137,12 @@ int main(int argc, char* argv[])
     std::map<std::string, EndEffectorParam> eeparam_map;
     EndEffectorParam rleg(hrp::Vector3(0, -0.1, 0), hrp::Matrix33::Identity());
     EndEffectorParam lleg(hrp::Vector3(0,  0.1, 0), hrp::Matrix33::Identity());
+    EndEffectorParam rarm(hrp::Vector3(0, -0.3, 0.5), rotFromRpy(-90*M_PI/180,0,0), 3);
+    EndEffectorParam larm(hrp::Vector3(0, 0.3, 0.5), rotFromRpy(90*M_PI/180,0,0), 3);
     eeparam_map.insert(std::pair<std::string, EndEffectorParam>("rleg", rleg));
     eeparam_map.insert(std::pair<std::string, EndEffectorParam>("lleg", lleg));
+    eeparam_map.insert(std::pair<std::string, EndEffectorParam>("rarm", rarm));
+    eeparam_map.insert(std::pair<std::string, EndEffectorParam>("larm", larm));
     while (r) {
         hrp::Vector3 p, x; // x cog
         std::vector<hrp::Vector3> qdata;
