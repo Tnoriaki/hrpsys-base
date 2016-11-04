@@ -79,7 +79,7 @@ class EndEffectorParam
     void calcStateConstraintsMatrix(hrp::dmatrix& C, hrp::Vector3& e_vec);
     void calcFrictionConstraintsMatrix(hrp::dmatrix& C, hrp::Vector3& mu_vec);
     void calcMomentumConstraintsMatrix(hrp::dmatrix& C, hrp::dvector& support_polygon_vec);
-    void calcConstraintsMatrix();
+    virtual void calcConstraintsMatrix();
 };
 
 class WrenchDistributor : public EndEffectorParam
