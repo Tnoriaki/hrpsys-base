@@ -76,9 +76,9 @@ class EndEffectorParam
         mu_vec = _mu_vec;
         support_polygon_vec = _support_polygon_vec;
     }
-    void calcStateConstraintsMatrix(hrp::dmatrix& C);
-    void calcFrictionConstraintsMatrix(hrp::dmatrix& C);
-    void calcMomentumConstraintsMatrix(hrp::dmatrix& C);
+    void calcStateConstraintsMatrix(hrp::dmatrix& C, hrp::Vector3& e_vec);
+    void calcFrictionConstraintsMatrix(hrp::dmatrix& C, hrp::Vector3& mu_vec);
+    void calcMomentumConstraintsMatrix(hrp::dmatrix& C, hrp::dvector& support_polygon_vec);
     void calcConstraintsMatrix();
 };
 

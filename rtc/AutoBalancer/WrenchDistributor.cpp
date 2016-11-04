@@ -3,13 +3,13 @@
 #include "WrenchDistributor.h"
 
 
-void EndEffectorParam::calcStateConstraintsMatrix(hrp::dmatrix& C)
+void EndEffectorParam::calcStateConstraintsMatrix(hrp::dmatrix& C, hrp::Vector3& e_vec)
 {
     C = hrp::dmatrix::Zero(1,state_dim);
     C.block(0,0,1,3) << e_vec(0), e_vec(1), e_vec(2);
 }
 
-void EndEffectorParam::calcFrictionConstraintsMatrix(hrp::dmatrix& C)
+void EndEffectorParam::calcFrictionConstraintsMatrix(hrp::dmatrix& C, hrp::Vector3& mu_vec)
 {
     if ( move_vec.norm() == 0 ){ // static
         C = hrp::dmatrix::Zero(4, state_dim);
@@ -31,7 +31,7 @@ void EndEffectorParam::calcFrictionConstraintsMatrix(hrp::dmatrix& C)
     }
 }
 
-void EndEffectorParam::calcMomentumConstraintsMatrix(hrp::dmatrix& C)
+void EndEffectorParam::calcMomentumConstraintsMatrix(hrp::dmatrix& C, hrp::dvector& support_polygon_vec)
 {
     // spv = (dx+,dx-,dy+,dy-)
     if ( state_dim == 6 ){ // TODO (line contact)
@@ -54,9 +54,9 @@ void EndEffectorParam::calcMomentumConstraintsMatrix(hrp::dmatrix& C)
 void EndEffectorParam::calcConstraintsMatrix()
 {
     hrp::dmatrix C_state, C_friction, C_moment;
-    calcStateConstraintsMatrix(C_state);
-    calcFrictionConstraintsMatrix(C_friction);
-    calcMomentumConstraintsMatrix(C_moment);
+    calcStateConstraintsMatrix(C_state, e_vec);
+    calcFrictionConstraintsMatrix(C_friction, mu_vec);
+    calcMomentumConstraintsMatrix(C_moment, support_polygon_vec);
     size_t cs_dim = C_state.rows();
     size_t cf_dim = C_friction.rows();
     size_t cm_dim = C_moment.rows();
