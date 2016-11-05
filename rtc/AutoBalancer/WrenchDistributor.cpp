@@ -91,6 +91,7 @@ void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, End
         weight_vector.segment( 6 + index , it->second.state_dim ) *= it->second.weight;
         Amat.block(current_dim, index, it->second.c_dim, it->second.state_dim) = it->second.Cmat;
         current_dim += it->second.c_dim;
+        it->second.index = index;
         index += it->second.state_dim;
     }
 }
@@ -105,12 +106,10 @@ void WrenchDistributor::calcEvaluationFunctionMatrix(const std::map<std::string,
     Wmat = weight_vector.asDiagonal();
     Ximat.block(0,0,3,1) = ref_linear_momentum_rate + hrp::Vector3(0,0,mass*gravitational_acceleration);
     Ximat.block(3,0,3,1) = ref_angular_momentum_rate;
-    size_t index = 0;
     for ( std::map<std::string, EndEffectorParam>::const_iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
-        Phimat.block(0, index, 3,3) = hrp::dmatrix::Identity(3,3);
-        Phimat.block(3, index, 3,3) << hrp::hat(it->second.pos - ref_cog);
-        if ( it->second.state_dim == 6 ) Phimat.block(3, index + 3,3, 3) = hrp::dmatrix::Identity(3,3); // TODO
-        index += it->second.state_dim;
+        Phimat.block(0, it->second.index, 3,3) = hrp::dmatrix::Identity(3,3);
+        Phimat.block(3, it->second.index, 3,3) << hrp::hat(it->second.pos - ref_cog);
+        if ( it->second.state_dim == 6 ) Phimat.block(3, it->second.index + 3,3, 3) = hrp::dmatrix::Identity(3,3); // TODO
     }
     Phimat.block(6,0,Phirows-6,Phicols) = hrp::dmatrix::Identity(Phirows-6,Phicols);
     Hmat = Phimat.transpose()*Wmat*Phimat;

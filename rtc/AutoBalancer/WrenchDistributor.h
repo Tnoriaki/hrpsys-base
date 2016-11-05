@@ -26,6 +26,7 @@ using namespace qpOASES;
 class EndEffectorParam
 {
     public:
+    size_t index;
     size_t state_dim;
     size_t c_dim;
     double weight; // standard 1
@@ -82,7 +83,7 @@ class EndEffectorParam
     virtual void calcConstraintsMatrix();
 };
 
-class WrenchDistributor : public EndEffectorParam
+class WrenchDistributor
 {
     private:
     double mass;
@@ -116,10 +117,8 @@ class WrenchDistributor : public EndEffectorParam
         calcEvaluationFunctionMatrix(_eeparam_map);
         solveWrenchQP();
         calcMomentumRate();
-        size_t index = 0;
         for ( std::map<std::string, EndEffectorParam>::iterator it = _eeparam_map.begin(); it != _eeparam_map.end(); it++ ){
-            it->second.wrench.segment(0,it->second.state_dim) = wrenches.segment(index, it->second.state_dim);
-            index += it->second.state_dim;
+            it->second.wrench.segment(0,it->second.state_dim) = wrenches.segment(it->second.index, it->second.state_dim);
         }
     }
     void calcAugmentedConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map);
