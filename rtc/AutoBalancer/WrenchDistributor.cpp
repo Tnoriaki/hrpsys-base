@@ -69,6 +69,26 @@ void EndEffectorParam::calcConstraintsMatrix()
     Cmat = Cmat * Rmat;
 }
 
+void ObjectParam::calcConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map)
+{
+    size_t states_dim = 0;
+    // assuming eeparam_map[]->calcConstraintsMatrix
+    for ( std::map<std::string, EndEffectorParam>::iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
+        states_dim += it->second.state_dim;
+    }
+    Cmat = hrp::dmatrix::Zero(5, states_dim);
+    for ( std::vector<std::string>::iterator it = object_contact_eename_vec.begin(); it != object_contact_eename_vec.end(); it++ ){
+        size_t index = eeparam_map[*it].index;
+        size_t tmp_state_dim = eeparam_map[*it].state_dim;
+        hrp::dmatrix tmpC_state;
+        hrp::dmatrix tmpC_friction;
+        eeparam_map[*it].calcStateConstraintsMatrix(tmpC_state, e_vec);
+        eeparam_map[*it].calcFrictionConstraintsMatrix(tmpC_friction, mu_vec, move_vec);
+        Cmat.block(0, index, 1, tmp_state_dim) = tmpC_state * rot;
+        Cmat.block(1, index, 4, tmp_state_dim) = tmpC_friction * rot;
+    }
+}
+
 void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map)
 {
     constraints_dim = 0;
@@ -91,6 +111,33 @@ void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, End
         it->second.index = index;
         index += it->second.state_dim;
     }
+}
+
+void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map, ObjectParam& oparam)
+{
+    constraints_dim = 0;
+    states_dim = 0;
+    for ( std::map<std::string, EndEffectorParam>::iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
+        it->second.calcConstraintsMatrix();
+        constraints_dim += it->second.c_dim;
+        states_dim += it->second.state_dim;
+    }
+    weight_vector = hrp::dvector::Ones(6+states_dim);
+    weight_vector.head(6) = 1e5*hrp::dvector::Ones(6);
+    constraints_dim += oparam.Cmat.rows();
+    Amat = hrp::dmatrix::Zero(constraints_dim+4, states_dim);
+    size_t current_dim = 0;
+    size_t index = 0;
+    for ( std::map<std::string, EndEffectorParam>::iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
+        weight_vector.segment( 6 + index , 3 ) << 1e-5, 1e-5, 1e-5;
+        weight_vector.segment( 6 + index , it->second.state_dim ) *= it->second.weight;
+        Amat.block(current_dim, index, it->second.c_dim, it->second.state_dim) = it->second.Cmat;
+        current_dim += it->second.c_dim;
+        it->second.index = index;
+        index += it->second.state_dim;
+    }
+    oparam.calcConstraintsMatrix(eeparam_map);
+    Amat.block(current_dim, 0, oparam.Cmat.rows(), oparam.Cmat.cols()) = oparam.Cmat;
 }
 
 void WrenchDistributor::calcEvaluationFunctionMatrix(const std::map<std::string, EndEffectorParam>& eeparam_map)

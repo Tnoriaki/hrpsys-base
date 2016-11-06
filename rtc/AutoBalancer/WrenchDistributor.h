@@ -71,6 +71,18 @@ class EndEffectorParam
     virtual void calcConstraintsMatrix();
 };
 
+class ObjectParam : public EndEffectorParam
+{
+    private:
+    double mass; //0 TODO
+    double gravitational_acceleration;
+    public:
+    std::vector<std::string> object_contact_eename_vec;
+    hrp::Vector3 ref_linear_momentum_rate; // 0 TODO
+    hrp::Vector3 ref_angular_momentum_rate; // 0 TODO
+    virtual void calcConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map);
+};
+
 class WrenchDistributor
 {
     private:
@@ -111,7 +123,21 @@ class WrenchDistributor
             it->second.wrench.segment(0,it->second.state_dim) = wrenches.segment(it->second.index, it->second.state_dim);
         }
     }
+    void DistributeWrench(const hrp::Vector3& _ref_cog, const hrp::Vector3& _ref_linear_momentum_rate, const hrp::Vector3& _ref_angular_momentum_rate, std::map<std::string, EndEffectorParam>& _eeparam_map, ObjectParam& _oparam){
+        ee_num = _eeparam_map.size();
+        ref_cog = _ref_cog;
+        ref_linear_momentum_rate = _ref_linear_momentum_rate;
+        ref_angular_momentum_rate = _ref_angular_momentum_rate;
+        calcAugmentedConstraintsMatrix(_eeparam_map, _oparam);
+        calcEvaluationFunctionMatrix(_eeparam_map);
+        solveWrenchQP();
+        calcMomentumRate();
+        for ( std::map<std::string, EndEffectorParam>::iterator it = _eeparam_map.begin(); it != _eeparam_map.end(); it++ ){
+            it->second.wrench.segment(0,it->second.state_dim) = wrenches.segment(it->second.index, it->second.state_dim);
+        }
+    }
     void calcAugmentedConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map);
+    void calcAugmentedConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map, ObjectParam& oparam);
     void calcEvaluationFunctionMatrix(const std::map<std::string, EndEffectorParam>& eeparam_map);
     void solveWrenchQP ();
     void calcMomentumRate();
