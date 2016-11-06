@@ -77,10 +77,10 @@ class EndEffectorParam
         mu_vec = _mu_vec;
         support_polygon_vec = _support_polygon_vec;
     }
-    void calcStateConstraintsMatrix(hrp::dmatrix& C);
-    void calcFrictionConstraintsMatrix(hrp::dmatrix& C);
-    void calcMomentumConstraintsMatrix(hrp::dmatrix& C);
-    void calcConstraintsMatrix();
+    void calcStateConstraintsMatrix(hrp::dmatrix& C, hrp::Vector3& _e_vec);
+    void calcFrictionConstraintsMatrix(hrp::dmatrix& C, hrp::Vector3& _mu_vec, hrp::Vector3& _move_vec);
+    void calcMomentumConstraintsMatrix(hrp::dmatrix& C, hrp::dvector& _support_polygon_vec, hrp::Vector3& _mu_vec);
+    virtual void calcConstraintsMatrix();
 };
 
 class WrenchDistributor
