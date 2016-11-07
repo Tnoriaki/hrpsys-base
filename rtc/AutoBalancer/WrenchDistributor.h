@@ -77,9 +77,11 @@ class ObjectParam : public EndEffectorParam
     double mass; //0 TODO
     double gravitational_acceleration;
     public:
+    size_t states_dim;
     std::vector<std::string> object_contact_eename_vec;
     hrp::Vector3 ref_linear_momentum_rate; // 0 TODO
     hrp::Vector3 ref_angular_momentum_rate; // 0 TODO
+    void calcAugmentedMomentumConstraintsMatrix(hrp::dmatrix& C, hrp::dvector& _support_polygon_vec, hrp::Vector3& _mu_vec, std::map<std::string, EndEffectorParam>& eeparam_map);
     virtual void calcConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map);
 };
 

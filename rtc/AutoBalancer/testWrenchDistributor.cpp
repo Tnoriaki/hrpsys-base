@@ -46,6 +46,8 @@ void decide_contact_states(const size_t index, std::map<std::string, EndEffector
     if ( index < 25 ) {
         tmp_eeparam_map["rleg"] = eeparam_map["rleg"];
         tmp_eeparam_map["lleg"] = eeparam_map["lleg"];
+        // tmp_eeparam_map["rarm"] = eeparam_map["rarm"];
+        // tmp_eeparam_map["larm"] = eeparam_map["larm"];
     } else if ( index < 100 ){
         tmp_eeparam_map["lleg"] = eeparam_map["lleg"];
     } else if ( index < 150 ){
@@ -159,8 +161,8 @@ int main(int argc, char* argv[])
             hrp::Vector3 com_pos = hrp::Vector3(x[0],x[1],0.8);
             hrp::Vector3 ref_linear_momentum_rate = mass * hrp::Vector3(omega2*(x[0]-cart_zmp[0]),omega2*(x[1]-cart_zmp[1]),0);
             hrp::Vector3 ref_angular_momentum_rate = hrp::Vector3(0,0,0);
-            // decide_contact_states(index, tmp_eeparam_map, eeparam_map);
-            decide_contact_states2(dt, index, tmp_eeparam_map, eeparam_map, ip);
+            decide_contact_states(index, tmp_eeparam_map, eeparam_map);
+            // decide_contact_states2(dt, index, tmp_eeparam_map, eeparam_map, ip);
             mtimer("time"){
                 wd.DistributeWrench(com_pos, ref_linear_momentum_rate, ref_angular_momentum_rate, tmp_eeparam_map);
             }
