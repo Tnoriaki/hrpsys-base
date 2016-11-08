@@ -124,7 +124,6 @@ void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, End
         states_dim += it->second.state_dim;
     }
     weight_vector = hrp::dvector::Ones(6+states_dim);
-    weight_vector.head(6) = 1e5 * hrp::dvector::Ones(6);
     Amat = hrp::dmatrix::Zero(constraints_dim, states_dim);
     size_t current_dim = 0;
     size_t index = 0;
@@ -148,7 +147,6 @@ void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, End
         states_dim += it->second.state_dim;
     }
     weight_vector = hrp::dvector::Ones(6+states_dim);
-    weight_vector.head(6) = 1e5*hrp::dvector::Ones(6);
     constraints_dim += 11; // TODO
     Amat = hrp::dmatrix::Zero(constraints_dim, states_dim);
     size_t current_dim = 0;

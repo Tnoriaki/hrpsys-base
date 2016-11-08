@@ -739,7 +739,7 @@ void AutoBalancer::getTargetParameters()
                   if ( is_hand_fix_mode && ( it->first == "rarm" || it->first == "larm") ) { // for hand (kickboard)
                       EndEffectorParam tmp_eeparam(tmp_ee_pos, tmp_ee_rot, 3); // without torque
                       tmp_eeparam.e_vec = hrp::Vector3::Zero();
-                      tmp_eeparam.weight = 1e10;
+                      tmp_eeparam.weight = 1e5;
                       eeparam_map.insert(std::pair<std::string, EndEffectorParam>(it->first, tmp_eeparam));
                   }
               }
