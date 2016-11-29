@@ -720,17 +720,20 @@ void AutoBalancer::getTargetParameters()
               if ( gg->get_skate_acc()(0) == 0 ){ // default
                   if ( m_contactStates.data[contact_states_index_map[it->first]] ){ // support leg
                       EndEffectorParam tmp_eeparam(tmp_ee_pos, tmp_ee_rot);
+                      tmp_eeparam.weight << 1e-5, 1e-5, 1e-5, 1.0, 1.0, 1.0;
                       eeparam_map.insert(std::pair<std::string, EndEffectorParam>(it->first, tmp_eeparam));
                   }
               } else { // skate acc
                   ref_cog_acc(0) = ref_cog_acc(0) - gg->get_skate_acc()(0);
                   if ( support_leg_names.front() == it->first ){ // support leg
                       EndEffectorParam tmp_eeparam(tmp_ee_pos, tmp_ee_rot);
+                      tmp_eeparam.weight << 1e-5, 1e-5, 1e-5, 1.0, 1.0, 1.0;
                       tmp_eeparam.move_vec = hrp::Vector3(1,0,0);
                       tmp_eeparam.mu_vec = hrp::Vector3(mu,mu_rolling,mu*0.05);
                       eeparam_map.insert(std::pair<std::string, EndEffectorParam>(it->first, tmp_eeparam));
                   } else if ( swing_leg_names.front() == it->first ){ // kick leg
                       EndEffectorParam tmp_eeparam(tmp_ee_pos, tmp_ee_rot);
+                      tmp_eeparam.weight << 1e-5, 1e-5, 1e-5, 1.0, 1.0, 1.0;
                       eeparam_map.insert(std::pair<std::string, EndEffectorParam>(it->first, tmp_eeparam));
                   }
               }
@@ -739,7 +742,6 @@ void AutoBalancer::getTargetParameters()
                   if ( is_hand_fix_mode && ( it->first == "rarm" || it->first == "larm") ) { // for hand (kickboard)
                       EndEffectorParam tmp_eeparam(tmp_ee_pos, tmp_ee_rot, 3); // without torque
                       tmp_eeparam.e_vec = hrp::Vector3::Zero();
-                      tmp_eeparam.weight = 1e5;
                       eeparam_map.insert(std::pair<std::string, EndEffectorParam>(it->first, tmp_eeparam));
                   }
               }
@@ -755,7 +757,6 @@ void AutoBalancer::getTargetParameters()
               oparam.object_contact_eename_vec = tmp_object_contact_eename_vec;
               oparam.pos = eeparam_map[support_leg_names.front()].pos;
               wrench_distributor.DistributeWrench(gg->get_cog(), m_robot->totalMass()*ref_cog_acc, ref_cog_angular_acc, eeparam_map, oparam);
-              // wrench_distributor.DistributeWrench(gg->get_cog(), m_robot->totalMass()*ref_cog_acc, ref_cog_angular_acc, eeparam_map);
           } else {
               wrench_distributor.DistributeWrench(gg->get_cog(), m_robot->totalMass()*ref_cog_acc, ref_cog_angular_acc, eeparam_map);
           }

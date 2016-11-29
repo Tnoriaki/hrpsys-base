@@ -29,7 +29,6 @@ class EndEffectorParam
     size_t index;
     size_t state_dim;
     size_t c_dim;
-    double weight; // standard 1
     hrp::Vector3 pos;
     hrp::Matrix33 rot;
     hrp::Vector3 e_vec; // selection vector (0,0,1,0,0,0) => unilateral / selection vector (0,0,0,0,0,0) => attached
@@ -38,7 +37,8 @@ class EndEffectorParam
     hrp::dvector support_polygon_vec; // only rectangle
     hrp::dmatrix Cmat;
     hrp::dvector wrench;
-    EndEffectorParam() : state_dim(6), c_dim(0), weight(1),
+    hrp::dvector weight;
+    EndEffectorParam() : state_dim(6), c_dim(0), weight(hrp::dvector::Ones(state_dim)),
                          e_vec(hrp::Vector3(0,0,1)), mu_vec(hrp::Vector3(0.3,0.1,0.03)), move_vec(hrp::Vector3(0,0,0)),
                          pos(hrp::Vector3::Zero()), rot(hrp::Matrix33::Identity())
     {
@@ -46,7 +46,7 @@ class EndEffectorParam
         support_polygon_vec << 0.1,0.1,0.05,0.05;
         wrench = hrp::dvector::Zero(6);
     };
-    EndEffectorParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot, const size_t _state_dim = 6) : state_dim(_state_dim), c_dim(0), weight(1),
+    EndEffectorParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot, const size_t _state_dim = 6) : state_dim(_state_dim), c_dim(0), weight(hrp::dvector::Ones(_state_dim)),
                                                                                                            pos(_pos), rot(_rot),
                                                                                                            e_vec(hrp::Vector3(0,0,1)), mu_vec(hrp::Vector3(0.3,0.1,0.03)),
                                                                                                            move_vec(hrp::Vector3(0,0,0))
@@ -58,7 +58,7 @@ class EndEffectorParam
     void setEEParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot, const double _weight = 1.0){
         pos = _pos;
         rot = _rot;
-        weight = _weight;
+        weight *= _weight;
     }
     void setCCParam(const hrp::Vector3& _e_vec, const hrp::Vector3& _mu_vec, const hrp::dvector _support_polygon_vec){
         e_vec = _e_vec;

@@ -128,8 +128,7 @@ void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, End
     size_t current_dim = 0;
     size_t index = 0;
     for ( std::map<std::string, EndEffectorParam>::iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
-        weight_vector.segment( 6 + index , 3 ) << 1e-5, 1e-5, 1e-5;
-        weight_vector.segment( 6 + index , it->second.state_dim ) *= it->second.weight;
+        weight_vector.segment( 6 + index , it->second.state_dim ) = it->second.weight;
         Amat.block(current_dim, index, it->second.c_dim, it->second.state_dim) = it->second.Cmat;
         current_dim += it->second.c_dim;
         it->second.index = index;
@@ -152,8 +151,7 @@ void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, End
     size_t current_dim = 0;
     size_t index = 0;
     for ( std::map<std::string, EndEffectorParam>::iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
-        weight_vector.segment( 6 + index , 3 ) << 1e-5, 1e-5, 1e-5;
-        weight_vector.segment( 6 + index , it->second.state_dim ) *= it->second.weight;
+        weight_vector.segment( 6 + index , it->second.state_dim ) = it->second.weight;
         Amat.block(current_dim, index, it->second.c_dim, it->second.state_dim) = it->second.Cmat;
         current_dim += it->second.c_dim;
         it->second.index = index;
