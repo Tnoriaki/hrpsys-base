@@ -728,12 +728,13 @@ void AutoBalancer::getTargetParameters()
                   if ( support_leg_names.front() == it->first ){ // support leg
                       EndEffectorParam tmp_eeparam(tmp_ee_pos, tmp_ee_rot);
                       tmp_eeparam.weight << 1e-5, 1e-5, 1e-5, 1.0, 1.0, 1.0;
-                      tmp_eeparam.move_vec = hrp::Vector3(1,0,0);
+                      // tmp_eeparam.move_vec = hrp::Vector3(1,0,0);
                       tmp_eeparam.mu_vec = hrp::Vector3(mu,mu_rolling,mu*0.05);
                       eeparam_map.insert(std::pair<std::string, EndEffectorParam>(it->first, tmp_eeparam));
                   } else if ( swing_leg_names.front() == it->first ){ // kick leg
                       EndEffectorParam tmp_eeparam(tmp_ee_pos, tmp_ee_rot);
                       tmp_eeparam.weight << 1e-5, 1e-5, 1e-5, 1.0, 1.0, 1.0;
+                      tmp_eeparam.mu_vec = hrp::Vector3(mu,mu_rolling,mu*0.05);
                       eeparam_map.insert(std::pair<std::string, EndEffectorParam>(it->first, tmp_eeparam));
                   }
               }
@@ -742,6 +743,8 @@ void AutoBalancer::getTargetParameters()
                   if ( is_hand_fix_mode && ( it->first == "rarm" || it->first == "larm") ) { // for hand (kickboard)
                       EndEffectorParam tmp_eeparam(tmp_ee_pos, tmp_ee_rot, 3); // without torque
                       tmp_eeparam.e_vec = hrp::Vector3::Zero();
+                      tmp_eeparam.max_wrench = 20 * hrp::Vector3::Ones();
+                      tmp_eeparam.min_wrench = -20 * hrp::Vector3::Ones();
                       eeparam_map.insert(std::pair<std::string, EndEffectorParam>(it->first, tmp_eeparam));
                   }
               }
@@ -754,6 +757,7 @@ void AutoBalancer::getTargetParameters()
               tmp_object_contact_eename_vec.push_back( "rarm" );
               tmp_object_contact_eename_vec.push_back( "larm" );
               oparam.move_vec = hrp::Vector3(1,0,0);
+              oparam.mu_vec = hrp::Vector3(mu,mu_rolling,mu*0.05);
               oparam.object_contact_eename_vec = tmp_object_contact_eename_vec;
               oparam.pos = eeparam_map[support_leg_names.front()].pos;
               wrench_distributor.DistributeWrench(gg->get_cog(), m_robot->totalMass()*ref_cog_acc, ref_cog_angular_acc, eeparam_map, oparam);
@@ -922,22 +926,22 @@ void AutoBalancer::getTargetParameters()
     }
 
     // // set ref_forces
-    // {
-    //       std::vector<hrp::Vector3> ee_pos;
-    //       for (size_t i = 0 ; i < leg_names.size(); i++) {
-    //           ABCIKparam& tmpikp = ikp[leg_names[i]];
-    //           ee_pos.push_back(tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[i]);
-    //       }
-    //       double alpha = (ref_zmp - ee_pos[1]).norm() / ((ee_pos[0] - ref_zmp).norm() + (ee_pos[1] - ref_zmp).norm());
-    //       if (alpha>1.0) alpha = 1.0;
-    //       if (alpha<0.0) alpha = 0.0;
-    //       if (DEBUGP) {
-    //       std::cerr << "[" << m_profile.instance_name << "] alpha:" << alpha << std::endl;
-    //       }
-    //       double mg = m_robot->totalMass() * gg->get_gravitational_acceleration();
-    //       m_force[0].data[2] = alpha * mg;
-    //       m_force[1].data[2] = (1-alpha) * mg;
-    // }
+    if ( !gg_is_walking ) {
+          std::vector<hrp::Vector3> ee_pos;
+          for (size_t i = 0 ; i < leg_names.size(); i++) {
+              ABCIKparam& tmpikp = ikp[leg_names[i]];
+              ee_pos.push_back(tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[i]);
+          }
+          double alpha = (ref_zmp - ee_pos[1]).norm() / ((ee_pos[0] - ref_zmp).norm() + (ee_pos[1] - ref_zmp).norm());
+          if (alpha>1.0) alpha = 1.0;
+          if (alpha<0.0) alpha = 0.0;
+          if (DEBUGP) {
+          std::cerr << "[" << m_profile.instance_name << "] alpha:" << alpha << std::endl;
+          }
+          double mg = m_robot->totalMass() * gg->get_gravitational_acceleration();
+          m_force[0].data[2] = alpha * mg;
+          m_force[1].data[2] = (1-alpha) * mg;
+    }
 
     hrp::Vector3 tmp_foot_mid_pos(hrp::Vector3::Zero());
     {

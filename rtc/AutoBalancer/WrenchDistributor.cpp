@@ -22,8 +22,8 @@ void EndEffectorParam::calcFrictionConstraintsMatrix(hrp::dmatrix& C, hrp::Vecto
         if ( _move_vec(i) == 0 ) { // static
             C(2*i,2) = C(2*i+1,2) = _mu_vec(0);
         } else { // sliding
-            C(2*i,2) = -_mu_vec(1)*(-_move_vec(i));
-            C(2*i+1,2) = _mu_vec(1)*(-_move_vec(i));
+            C(2*i,2) = _mu_vec(1) * _move_vec(i);
+            C(2*i+1,2) = -_mu_vec(1) * _move_vec(i);
         }
     }
 }
@@ -50,18 +50,22 @@ void EndEffectorParam::calcMomentumConstraintsMatrix(hrp::dmatrix& C, hrp::dvect
 
 void EndEffectorParam::calcConstraintsMatrix()
 {
-    hrp::dmatrix C_state, C_friction, C_moment;
-    calcStateConstraintsMatrix(C_state, e_vec);
-    calcFrictionConstraintsMatrix(C_friction, mu_vec, move_vec);
-    calcMomentumConstraintsMatrix(C_moment, support_polygon_vec, mu_vec);
-    size_t cs_dim = C_state.rows();
-    size_t cf_dim = C_friction.rows();
-    size_t cm_dim = C_moment.rows();
-    c_dim = cs_dim+cf_dim+cm_dim;
-    Cmat = hrp::dmatrix::Zero(c_dim, state_dim);
-    Cmat.block(0,0,cs_dim,state_dim) = C_state;
-    Cmat.block(cs_dim,0,cf_dim,state_dim) = C_friction;
-    if (state_dim == 6) Cmat.block(cs_dim+cf_dim,0,cm_dim,state_dim) = C_moment;
+    if ( e_vec != hrp::Vector3::Zero() ){ // unilateral
+        hrp::dmatrix C_state, C_friction, C_moment;
+        calcStateConstraintsMatrix(C_state, e_vec);
+        calcFrictionConstraintsMatrix(C_friction, mu_vec, move_vec);
+        calcMomentumConstraintsMatrix(C_moment, support_polygon_vec, mu_vec);
+        size_t cs_dim = C_state.rows();
+        size_t cf_dim = C_friction.rows();
+        size_t cm_dim = C_moment.rows();
+        c_dim = cs_dim+cf_dim+cm_dim;
+        Cmat = hrp::dmatrix::Zero(c_dim, state_dim);
+        Cmat.block(0,0,cs_dim,state_dim) = C_state;
+        Cmat.block(cs_dim,0,cf_dim,state_dim) = C_friction;
+        if (state_dim == 6) Cmat.block(cs_dim+cf_dim,0,cm_dim,state_dim) = C_moment;
+    } else { // attached
+        Cmat.resize(0,0);
+    }
     // Local Frame => World Frame
     hrp::dmatrix Rmat(hrp::dmatrix::Zero(state_dim, state_dim));
     Rmat.block(0,0,3,3) = rot;
@@ -76,15 +80,17 @@ void ObjectParam::calcConstraintsMatrix(std::map<std::string, EndEffectorParam>&
     for ( std::map<std::string, EndEffectorParam>::iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
         states_dim += it->second.state_dim;
     }
-    Cmat = hrp::dmatrix::Zero(11, states_dim); // TODO
+    Cmat = hrp::dmatrix::Zero(c_dim, states_dim); // TODO
     for ( std::vector<std::string>::iterator it = object_contact_eename_vec.begin(); it != object_contact_eename_vec.end(); it++ ){
         size_t index = eeparam_map[*it].index;
         size_t tmp_state_dim = eeparam_map[*it].state_dim;
         hrp::dmatrix tmpC_state, tmpC_friction;
         eeparam_map[*it].calcStateConstraintsMatrix(tmpC_state, e_vec);
         eeparam_map[*it].calcFrictionConstraintsMatrix(tmpC_friction, mu_vec, move_vec);
-        Cmat.block(0, index, 1, tmp_state_dim) = tmpC_state * rot;
-        Cmat.block(1, index, 4, tmp_state_dim) = tmpC_friction * rot;
+        // Cmat.block(0, index, 1, tmp_state_dim) = tmpC_state * rot;
+        // Cmat.block(1, index, 4, tmp_state_dim) = tmpC_friction * rot;
+        Cmat.block(0, index, 1, tmp_state_dim) = tmpC_state;
+        Cmat.block(1, index, 4, tmp_state_dim) = tmpC_friction;
     }
     hrp::dmatrix tmpC_moment;
     calcAugmentedMomentumConstraintsMatrix(tmpC_moment, support_polygon_vec, mu_vec, eeparam_map);
@@ -124,11 +130,15 @@ void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, End
         states_dim += it->second.state_dim;
     }
     weight_vector = hrp::dvector::Ones(6+states_dim);
+    max_wrenches = hrp::dvector::Zero(states_dim);
+    min_wrenches = hrp::dvector::Zero(states_dim);
     Amat = hrp::dmatrix::Zero(constraints_dim, states_dim);
     size_t current_dim = 0;
     size_t index = 0;
     for ( std::map<std::string, EndEffectorParam>::iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
         weight_vector.segment( 6 + index , it->second.state_dim ) = it->second.weight;
+        max_wrenches.segment( index , it->second.state_dim ) = it->second.max_wrench;
+        min_wrenches.segment( index , it->second.state_dim ) = it->second.min_wrench;
         Amat.block(current_dim, index, it->second.c_dim, it->second.state_dim) = it->second.Cmat;
         current_dim += it->second.c_dim;
         it->second.index = index;
@@ -146,12 +156,16 @@ void WrenchDistributor::calcAugmentedConstraintsMatrix(std::map<std::string, End
         states_dim += it->second.state_dim;
     }
     weight_vector = hrp::dvector::Ones(6+states_dim);
-    constraints_dim += 11; // TODO
+    max_wrenches = hrp::dvector::Zero(states_dim);
+    min_wrenches = hrp::dvector::Zero(states_dim);
+    constraints_dim += oparam.c_dim; // TODO
     Amat = hrp::dmatrix::Zero(constraints_dim, states_dim);
     size_t current_dim = 0;
     size_t index = 0;
     for ( std::map<std::string, EndEffectorParam>::iterator it = eeparam_map.begin(); it != eeparam_map.end(); it++ ){
         weight_vector.segment( 6 + index , it->second.state_dim ) = it->second.weight;
+        max_wrenches.segment( index , it->second.state_dim ) = it->second.max_wrench;
+        min_wrenches.segment( index , it->second.state_dim ) = it->second.min_wrench;
         Amat.block(current_dim, index, it->second.c_dim, it->second.state_dim) = it->second.Cmat;
         current_dim += it->second.c_dim;
         it->second.index = index;
@@ -196,8 +210,8 @@ void WrenchDistributor::solveWrenchQP ()
             H[i*states_dim+j] = Hmat(i,j);
         }
         g[i] = gvec(i);
-        lb[i] = -1e10;
-        ub[i] = 1e10;
+        lb[i] = min_wrenches(i);
+        ub[i] = max_wrenches(i);
     }
     for (size_t i = 0; i < constraints_dim; i++) {
         for (size_t j = 0; j < states_dim; j++){

@@ -37,23 +37,27 @@ class EndEffectorParam
     hrp::dvector support_polygon_vec; // only rectangle
     hrp::dmatrix Cmat;
     hrp::dvector wrench;
+    hrp::dvector max_wrench;
+    hrp::dvector min_wrench;
     hrp::dvector weight;
-    EndEffectorParam() : state_dim(6), c_dim(0), weight(hrp::dvector::Ones(state_dim)),
+    EndEffectorParam() : state_dim(6), c_dim(0),
+                         weight(hrp::dvector::Ones(state_dim)),
                          e_vec(hrp::Vector3(0,0,1)), mu_vec(hrp::Vector3(0.3,0.1,0.03)), move_vec(hrp::Vector3(0,0,0)),
-                         pos(hrp::Vector3::Zero()), rot(hrp::Matrix33::Identity())
+                         pos(hrp::Vector3::Zero()), rot(hrp::Matrix33::Identity()),
+                         wrench(hrp::dvector::Zero(6)), max_wrench(1e10*hrp::dvector::Ones(state_dim)), min_wrench(-1e10*hrp::dvector::Ones(state_dim))
     {
         support_polygon_vec.resize(4);
         support_polygon_vec << 0.1,0.1,0.05,0.05;
-        wrench = hrp::dvector::Zero(6);
     };
-    EndEffectorParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot, const size_t _state_dim = 6) : state_dim(_state_dim), c_dim(0), weight(hrp::dvector::Ones(_state_dim)),
-                                                                                                           pos(_pos), rot(_rot),
-                                                                                                           e_vec(hrp::Vector3(0,0,1)), mu_vec(hrp::Vector3(0.3,0.1,0.03)),
-                                                                                                           move_vec(hrp::Vector3(0,0,0))
+    EndEffectorParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot, const size_t _state_dim = 6) :
+        state_dim(_state_dim), c_dim(0),
+        weight(hrp::dvector::Ones(_state_dim)),
+        e_vec(hrp::Vector3(0,0,1)), mu_vec(hrp::Vector3(0.3,0.1,0.03)), move_vec(hrp::Vector3(0,0,0)),
+        pos(_pos), rot(_rot),
+        wrench(hrp::dvector::Zero(6)), max_wrench(1e10*hrp::dvector::Ones(state_dim)), min_wrench(-1e10*hrp::dvector::Ones(state_dim))
     {
         support_polygon_vec.resize(4);
         support_polygon_vec << 0.1,0.1,0.05,0.05;
-        wrench = hrp::dvector::Zero(6);
     };
     void setEEParam(const hrp::Vector3& _pos, const hrp::Matrix33& _rot, const double _weight = 1.0){
         pos = _pos;
@@ -81,6 +85,8 @@ class ObjectParam : public EndEffectorParam
     std::vector<std::string> object_contact_eename_vec;
     hrp::Vector3 ref_linear_momentum_rate; // 0 TODO
     hrp::Vector3 ref_angular_momentum_rate; // 0 TODO
+
+    ObjectParam() : EndEffectorParam() { c_dim = 11; }; // TODO
     void calcAugmentedMomentumConstraintsMatrix(hrp::dmatrix& C, hrp::dvector& _support_polygon_vec, hrp::Vector3& _mu_vec, std::map<std::string, EndEffectorParam>& eeparam_map);
     virtual void calcConstraintsMatrix(std::map<std::string, EndEffectorParam>& eeparam_map);
 };
@@ -96,6 +102,8 @@ class WrenchDistributor
     size_t constraints_dim;
     hrp::dvector weight_vector;
     hrp::dvector wrenches;
+    hrp::dvector max_wrenches;
+    hrp::dvector min_wrenches;
     hrp::dmatrix Hmat;
     hrp::dmatrix gvec;
     hrp::dmatrix Amat;
