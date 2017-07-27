@@ -764,7 +764,7 @@ void Stabilizer::getCurrentParameters ()
   }
 }
 
-void Stabilizer::calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matrix33& foot_origin_rot)
+void Stabilizer::calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matrix33& foot_origin_rot, double foot_origin_ratio)
 {
   rats::coordinates leg_c[2], tmpc;
   hrp::Vector3 ez = hrp::Vector3::UnitZ();
@@ -783,7 +783,7 @@ void Stabilizer::calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matri
   }
   if (ref_contact_states[contact_states_index_map["rleg"]] &&
       ref_contact_states[contact_states_index_map["lleg"]]) {
-    rats::mid_coords(tmpc, 0.5, leg_c[0], leg_c[1]);
+    rats::mid_coords(tmpc, foot_origin_ratio, leg_c[0], leg_c[1]);
     foot_origin_pos = tmpc.pos;
     foot_origin_rot = tmpc.rot;
   } else if (ref_contact_states[contact_states_index_map["rleg"]]) {
@@ -797,6 +797,7 @@ void Stabilizer::calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matri
 
 void Stabilizer::getActualParameters ()
 {
+  static bool switch_contact_states_flag = false;
   // Actual world frame =>
   hrp::Vector3 foot_origin_pos;
   hrp::Matrix33 foot_origin_rot;
@@ -815,7 +816,7 @@ void Stabilizer::getActualParameters ()
     m_robot->rootLink()->R = act_Rs * (senR.transpose() * m_robot->rootLink()->R);
     m_robot->calcForwardKinematics();
     act_base_rpy = hrp::rpyFromRot(m_robot->rootLink()->R);
-    calcFootOriginCoords (foot_origin_pos, foot_origin_rot);
+    calcFootOriginCoords (foot_origin_pos, foot_origin_rot, foot_origin_ratio);
   } else {
     for ( int i = 0; i < m_robot->numJoints(); i++ ) {
       m_robot->joint(i)->q = qorg[i];
@@ -851,8 +852,13 @@ void Stabilizer::getActualParameters ()
     //act_cogvel = foot_origin_rot.transpose() * act_cogvel;
     if (ref_contact_states != prev_ref_contact_states) {
       act_cogvel = (foot_origin_rot.transpose() * prev_act_foot_origin_rot) * act_cogvel;
+      switch_contact_states_flag = true;
     } else {
       act_cogvel = (act_cog - prev_act_cog)/dt;
+      if (switch_contact_states_flag){
+        if(use_cogvel_filter_reset) act_cogvel_filter->reset(ref_cogvel);
+        switch_contact_states_flag = false;
+      }
     }
     prev_act_foot_origin_rot = foot_origin_rot;
     act_cogvel = act_cogvel_filter->passFilter(act_cogvel);
@@ -1220,7 +1226,7 @@ void Stabilizer::getTargetParameters ()
     // Reference foot_origin frame =>
     hrp::Vector3 foot_origin_pos;
     hrp::Matrix33 foot_origin_rot;
-    calcFootOriginCoords (foot_origin_pos, foot_origin_rot);
+    calcFootOriginCoords (foot_origin_pos, foot_origin_rot, foot_origin_ratio);
     // initialize for new_refzmp
     new_refzmp = ref_zmp;
     rel_cog = m_robot->rootLink()->R.transpose() * (ref_cog-m_robot->rootLink()->p);
@@ -1577,7 +1583,7 @@ void Stabilizer::calcEEForceMomentControl() {
           m_robot->calcForwardKinematics();
           hrp::Vector3 foot_origin_pos;
           hrp::Matrix33 foot_origin_rot;
-          calcFootOriginCoords (foot_origin_pos, foot_origin_rot);
+          calcFootOriginCoords (foot_origin_pos, foot_origin_rot, foot_origin_ratio);
           // Calculate foot_origin_coords-relative ee pos and rot
           // Subtract them from target_ee_diff_xx
           for (size_t i = 0; i < stikp.size(); i++) {
@@ -1596,7 +1602,7 @@ void Stabilizer::calcEEForceMomentControl() {
       // Convert d_foot_pos in foot origin frame => "current" world frame
       hrp::Vector3 foot_origin_pos;
       hrp::Matrix33 foot_origin_rot;
-      calcFootOriginCoords (foot_origin_pos, foot_origin_rot);
+      calcFootOriginCoords (foot_origin_pos, foot_origin_rot, foot_origin_ratio);
       std::vector<hrp::Vector3> current_d_foot_pos;
       for (size_t i = 0; i < stikp.size(); i++)
           current_d_foot_pos.push_back(foot_origin_rot * stikp[i].d_foot_pos);
@@ -1820,6 +1826,7 @@ void Stabilizer::sync_2_st ()
   pangx_ref = pangy_ref = pangx = pangy = 0;
   rdx = rdy = rx = ry = 0;
   d_rpy[0] = d_rpy[1] = 0;
+  use_cogvel_filter_reset = false;
   pdr = hrp::Vector3::Zero();
   pos_ctrl = hrp::Vector3::Zero();
   for (size_t i = 0; i < stikp.size(); i++) {
@@ -2022,6 +2029,8 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
   default: break;
   }
   i_stp.emergency_check_mode = emergency_check_mode;
+  i_stp.foot_origin_ratio = foot_origin_ratio;
+  i_stp.use_cogvel_filter_reset = use_cogvel_filter_reset;
   i_stp.end_effector_list.length(stikp.size());
   i_stp.use_limb_stretch_avoidance = use_limb_stretch_avoidance;
   i_stp.use_zmp_truncation = use_zmp_truncation;
@@ -2190,6 +2199,8 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
   setBoolSequenceParamWithCheckContact(is_feedback_control_enable, i_stp.is_feedback_control_enable, std::string("is_feedback_control_enable"));
   setBoolSequenceParam(is_zmp_calc_enable, i_stp.is_zmp_calc_enable, std::string("is_zmp_calc_enable"));
   emergency_check_mode = i_stp.emergency_check_mode;
+  foot_origin_ratio = i_stp.foot_origin_ratio;
+  use_cogvel_filter_reset = i_stp.use_cogvel_filter_reset;
 
   transition_time = i_stp.transition_time;
   cop_check_margin = i_stp.cop_check_margin;
