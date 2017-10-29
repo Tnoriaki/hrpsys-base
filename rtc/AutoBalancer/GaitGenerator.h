@@ -3,7 +3,7 @@
 #define GAITGENERATOR_H
 #include "PreviewController.h"
 #include "../ImpedanceController/RatsMatrix.h"
-#include "interpolator.h"
+#include "../SequencePlayer/interpolator.h"
 #include <vector>
 #include <queue>
 #include <boost/assign.hpp>

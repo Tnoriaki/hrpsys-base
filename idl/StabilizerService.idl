@@ -11,6 +11,7 @@ module OpenHRP
     typedef double DblArray2[2];
     typedef double DblArray3[3];
     typedef double DblArray4[4];
+    typedef double DblArray10[10];
     typedef sequence<boolean> BoolSequence;
 
     /**
@@ -237,6 +238,8 @@ module OpenHRP
       DblArray2 root_rot_compensation_limit;
       /// Whether truncate zmp according to foot support polygon or not
       boolean use_zmp_truncation;
+      /// Parameter for Dynamic Morphing
+      DblArray10 dynamic_morphing_param;
     };
 
     /**

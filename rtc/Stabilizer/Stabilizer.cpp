@@ -352,6 +352,15 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
     eefm_body_attitude_control_gain[i] = 0.5;
     eefm_body_attitude_control_time_const[i] = 1e5;
   }
+  dynamic_morphing_param[0] = 0.0;
+  dynamic_morphing_param[1] = 1.0;
+  dynamic_morphing_param[2] = 0.1;
+  dynamic_morphing_param[3] = 0.5;
+  dynamic_morphing_param[4] = 0.01;
+  dynamic_morphing_param[5] = 0.06;
+  for (int i = 6; i < 10; i++) {
+      dynamic_morphing_param[i] = 0.0;
+  }
   for (size_t i = 0; i < stikp.size(); i++) {
       STIKParam& ikp = stikp[i];
       hrp::Link* root = m_robot->link(ikp.target_name);
@@ -883,6 +892,7 @@ void Stabilizer::getActualParameters ()
     for (size_t i = 0; i < 2; i++) {
       new_refzmp(i) += eefm_k1[i] * transition_smooth_gain * dcog(i) + eefm_k2[i] * transition_smooth_gain * dcogvel(i) + eefm_k3[i] * transition_smooth_gain * dzmp(i) + ref_zmp_aux(i);
     }
+    calcDynamicMorphingControl();
     if (DEBUGP) {
       // All state variables are foot_origin coords relative
       std::cerr << "[" << m_profile.instance_name << "] state values" << std::endl;
@@ -1305,6 +1315,42 @@ bool Stabilizer::calcZMP(hrp::Vector3& ret_zmp, const double zmp_z)
   }
 };
 
+void Stabilizer::calcDynamicMorphingControl()
+{
+    // set param
+    double p(dynamic_morphing_param[0]), k(dynamic_morphing_param[1]), d0(dynamic_morphing_param[2]), q(dynamic_morphing_param[3]); // (new ref zmp)
+    double h(dynamic_morphing_param[4]), margin(dynamic_morphing_param[5]); // (dz)
+    /// calc new ref zmp on the y axis
+    double zc(ref_cog(2) - ref_zmp(2)), omega(std::sqrt(eefm_gravitational_acceleration / zc)), dcog(act_cog[1] - ref_cog[1]), d, f;
+    d = std::sqrt(dcog * dcog + act_cogvel(1) * act_cogvel(1) / (omega * omega * q));
+    f = 1 - p * std::exp(k * (1 - (q + 1) * (q + 1) * (d * d) / (d0 * d0)));
+    new_refzmp(1) = (q + 1) * (dcog + f * act_cogvel(1) / omega);
+    /// calc foot pos height
+    std::complex<float> pz(new_refzmp[1], - (q + 1) * act_cogvel[1] / (omega * std::sqrt(q)));
+    double pz_abs = std::abs(pz);
+    double limit[2] = { -margin, margin }; // xRin, xLin (zmp limit)
+    for ( size_t i = 0; i < 2; i++ ) {
+        // initialization
+        ref_contact_states[i] = 1;
+        stikp[i].swing_support_gain = 1;
+        // calc phi
+        if ( pz_abs > margin ) {
+            double xin = limit[(i + 1) % 2];
+            double imag = (i == 0 ? 1 : -1) * std::sqrt(pz_abs * pz_abs - xin * xin);
+            std::complex<float> pin(xin, -imag), pout(xin, imag);
+            double phi =  std::arg(pz / pin) / std::arg(pout / pin);
+            // calc dz
+            if ( 0 < phi && phi < 1 ) {
+                std::cerr << i << " foot is swing foot" << std::endl;
+                double dz = 0.5 * h * pz_abs * (1 - std::cos(2.0 * M_PI * phi)) / d0;
+                target_ee_p[i][2] += dz;
+                ref_contact_states[i] = 0;
+                stikp[i].swing_support_gain = 0;
+            }
+        }
+    }
+}
+
 void Stabilizer::calcStateForEmergencySignal()
 {
   // COP Check
@@ -1604,7 +1650,7 @@ void Stabilizer::calcEEForceMomentControl() {
           current_d_foot_pos.push_back(foot_origin_rot * stikp[i].d_foot_pos);
 
       // Swing ee compensation.
-      calcSwingEEModification();
+      // calcSwingEEModification();
 
       // solveIK
       //   IK target is link origin pos and rot, not ee pos and rot.
@@ -1625,8 +1671,8 @@ void Stabilizer::calcEEForceMomentControl() {
             tmpR[i] = target_ee_R[i];
           }
           // Add swing ee compensation
-          rats::rotm3times(tmpR[i], tmpR[i], hrp::rotFromRpy(stikp[i].d_rpy_swing));
-          tmpp[i] = tmpp[i] + foot_origin_rot * stikp[i].d_pos_swing;
+          // rats::rotm3times(tmpR[i], tmpR[i], hrp::rotFromRpy(stikp[i].d_rpy_swing));
+          // tmpp[i] = tmpp[i] + foot_origin_rot * stikp[i].d_pos_swing;
         }
       }
 
@@ -1899,6 +1945,9 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
     i_stp.act_capture_point[i] = act_cp(i);
     i_stp.cp_offset[i] = cp_offset(i);
   }
+  for (size_t i = 0; i < 10; i++) {
+      i_stp.dynamic_morphing_param[i] = dynamic_morphing_param[i];
+  }
   i_stp.eefm_pos_time_const_support.length(stikp.size());
   i_stp.eefm_pos_damping_gain.length(stikp.size());
   i_stp.eefm_pos_compensation_limit.length(stikp.size());
@@ -2097,6 +2146,9 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
     ref_cp(i) = i_stp.ref_capture_point[i];
     act_cp(i) = i_stp.act_capture_point[i];
     cp_offset(i) = i_stp.cp_offset[i];
+  }
+  for (size_t i = 0; i < 10; i++) {
+      dynamic_morphing_param[i] = i_stp.dynamic_morphing_param[i];
   }
   bool is_damping_parameter_ok = true;
   if ( i_stp.eefm_pos_damping_gain.length () == stikp.size() &&
