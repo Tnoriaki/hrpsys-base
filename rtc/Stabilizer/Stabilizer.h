@@ -113,7 +113,7 @@ class Stabilizer
   void sync_2_st ();
   void sync_2_idle();
   bool calcZMP(hrp::Vector3& ret_zmp, const double zmp_z);
-  void calcDynamicMorphingControl();
+  void calcDynamicMorphingControl(const hrp::Vector3& foot_origin_pos, const hrp::Matrix33& foot_origin_rot);
   void calcStateForEmergencySignal();
   void calcRUNST();
   void moveBasePosRotForBodyRPYControl ();

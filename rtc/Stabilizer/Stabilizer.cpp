@@ -892,7 +892,7 @@ void Stabilizer::getActualParameters ()
     for (size_t i = 0; i < 2; i++) {
       new_refzmp(i) += eefm_k1[i] * transition_smooth_gain * dcog(i) + eefm_k2[i] * transition_smooth_gain * dcogvel(i) + eefm_k3[i] * transition_smooth_gain * dzmp(i) + ref_zmp_aux(i);
     }
-    calcDynamicMorphingControl();
+    calcDynamicMorphingControl(foot_origin_pos, foot_origin_rot);
     if (DEBUGP) {
       // All state variables are foot_origin coords relative
       std::cerr << "[" << m_profile.instance_name << "] state values" << std::endl;
@@ -1315,30 +1315,37 @@ bool Stabilizer::calcZMP(hrp::Vector3& ret_zmp, const double zmp_z)
   }
 };
 
-void Stabilizer::calcDynamicMorphingControl()
+void Stabilizer::calcDynamicMorphingControl(const hrp::Vector3& foot_origin_pos, const hrp::Matrix33& foot_origin_rot)
 {
-    // set param
+    // origin < p : ref_zmp(foot_origin_coords), R : foot_origin_rot >
+    /// set param
     double p(dynamic_morphing_param[0]), k(dynamic_morphing_param[1]), d0(dynamic_morphing_param[2]), q(dynamic_morphing_param[3]); // (new ref zmp)
     double h(dynamic_morphing_param[4]), margin(dynamic_morphing_param[5]); // (dz)
-    /// calc new ref zmp on the y axis
-    double zc(ref_cog(2) - ref_zmp(2)), omega(std::sqrt(eefm_gravitational_acceleration / zc)), dcog(act_cog[1] - ref_cog[1]), d, f;
-    d = std::sqrt(dcog * dcog + act_cogvel(1) * act_cogvel(1) / (omega * omega * q));
+    hrp::Vector3 pz = foot_origin_rot.transpose() * (new_refzmp - (foot_origin_rot * ref_zmp + foot_origin_pos));
+    hrp::Vector3 dcog(act_cog - ref_cog), dcogvel(act_cogvel - ref_cogvel), dzmp(act_zmp - ref_zmp);
+    /// calc zmp on the x axis (Kajita ST)
+    pz(0) -= eefm_k1[0] * transition_smooth_gain * dcog(0) + eefm_k2[0] * transition_smooth_gain * dcogvel(0) + eefm_k3[0] * transition_smooth_gain * dzmp(0);
+    /// calc zmp on the y axis (origin, p : ref_zmp, R : foot_origin_rot)
+    double zc(act_cog(2) - ref_zmp(2)), omega(std::sqrt(eefm_gravitational_acceleration / zc)), x((act_cog - ref_zmp)[1]), v(act_cogvel(1)), d, f;
+    d = std::sqrt(x * x + v * v / (omega * omega * q));
     f = 1 - p * std::exp(k * (1 - (q + 1) * (q + 1) * (d * d) / (d0 * d0)));
-    new_refzmp(1) = (q + 1) * (dcog + f * act_cogvel(1) / omega);
+    pz(1) = (q + 1) * (x + f * v / omega);
+    /// calc new ref zmp (origin, p : rootLink.p, R : rootLink.R)
+    new_refzmp = foot_origin_rot * (pz + ref_zmp) + foot_origin_pos;
     /// calc foot pos height
-    std::complex<float> pz(new_refzmp[1], - (q + 1) * act_cogvel[1] / (omega * std::sqrt(q)));
-    double pz_abs = std::abs(pz);
+    std::complex<float> pz_comp(pz(1), - (q + 1) * v / (omega * std::sqrt(q)));
+    double pz_abs = std::abs(pz_comp);
     double limit[2] = { -margin, margin }; // xRin, xLin (zmp limit)
     for ( size_t i = 0; i < 2; i++ ) {
         // initialization
         ref_contact_states[i] = 1;
         stikp[i].swing_support_gain = 1;
         // calc phi
-        if ( pz_abs > margin ) {
+        if ( pz_abs > margin && p != 0 ) {
             double xin = limit[(i + 1) % 2];
             double imag = (i == 0 ? 1 : -1) * std::sqrt(pz_abs * pz_abs - xin * xin);
             std::complex<float> pin(xin, -imag), pout(xin, imag);
-            double phi =  std::arg(pz / pin) / std::arg(pout / pin);
+            double phi =  std::arg(pz_comp / pin) / std::arg(pout / pin);
             // calc dz
             if ( 0 < phi && phi < 1 ) {
                 std::cerr << i << " foot is swing foot" << std::endl;
