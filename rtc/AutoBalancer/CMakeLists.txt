@@ -1,11 +1,15 @@
-set(comp_sources AutoBalancer.cpp AutoBalancerService_impl.cpp ../ImpedanceController/JointPathEx.cpp ../ImpedanceController/RatsMatrix.cpp ../SequencePlayer/interpolator.cpp PreviewController.cpp GaitGenerator.cpp SimpleFullbodyInverseKinematicsSolver.h ../TorqueFilter/IIRFilter.cpp)
-set(libs hrpModel-3.1 hrpCollision-3.1 hrpUtil-3.1 hrpsysBaseStub)
+find_package(PythonLibs REQUIRED)
+set(comp_sources AutoBalancer.cpp AutoBalancerService_impl.cpp ../ImpedanceController/JointPathEx.cpp ../ImpedanceController/RatsMatrix.cpp ../SequencePlayer/interpolator.cpp PreviewController.cpp GaitGenerator.cpp SimpleFullbodyInverseKinematicsSolver.h ../TorqueFilter/IIRFilter.cpp FootGuidedController.cpp)
+set(libs hrpModel-3.1 hrpCollision-3.1 hrpUtil-3.1 hrpsysBaseStub ${PYTHON_LIBRARIES})
 add_library(AutoBalancer SHARED ${comp_sources})
 target_link_libraries(AutoBalancer ${libs})
 set_target_properties(AutoBalancer PROPERTIES PREFIX "")
 
 add_executable(testPreviewController testPreviewController.cpp ../ImpedanceController/RatsMatrix.cpp PreviewController.cpp)
 target_link_libraries(testPreviewController ${libs})
+
+add_executable(testFootGuidedController testFootGuidedController.cpp PreviewController.cpp FootGuidedController.cpp)
+target_link_libraries(testFootGuidedController ${libs})
 
 add_executable(testGaitGenerator testGaitGenerator.cpp ../ImpedanceController/RatsMatrix.cpp PreviewController.cpp GaitGenerator.cpp ../SequencePlayer/interpolator.cpp)
 target_link_libraries(testGaitGenerator ${libs})
@@ -14,9 +18,11 @@ set_target_properties(testGaitGenerator PROPERTIES COMPILE_DEFINITIONS "FOR_TEST
 add_executable(AutoBalancerComp AutoBalancerComp.cpp ${comp_sources})
 target_link_libraries(AutoBalancerComp ${libs})
 
-include_directories(${PROJECT_SOURCE_DIR}/rtc/SequencePlayer)
+# include_directories(${PROJECT_SOURCE_DIR}/rtc/SequencePlayer)
+include_directories(${PROJECT_SOURCE_DIR}/rtc/SequencePlayer ${PYTHON_INCLUDE_DIRS}
+  /home/noriaki/ros/indigo/src/nt-ros-pkg/matplotlib-cpp-starter/)
 
-set(target AutoBalancer AutoBalancerComp testPreviewController testGaitGenerator)
+set(target AutoBalancer AutoBalancerComp testPreviewController testFootGuidedController testGaitGenerator)
 
 add_test(testPreviewControllerNoGP testPreviewController --use-gnuplot false)
 add_test(testGaitGeneratorTest0 testGaitGenerator --test0 --use-gnuplot false)
