@@ -11,7 +11,7 @@ target_link_libraries(testPreviewController ${libs})
 add_executable(testFootGuidedController testFootGuidedController.cpp PreviewController.cpp FootGuidedController.cpp)
 target_link_libraries(testFootGuidedController ${libs})
 
-add_executable(testGaitGenerator testGaitGenerator.cpp ../ImpedanceController/RatsMatrix.cpp PreviewController.cpp GaitGenerator.cpp ../SequencePlayer/interpolator.cpp)
+add_executable(testGaitGenerator testGaitGenerator.cpp ../ImpedanceController/RatsMatrix.cpp FootGuidedController.cpp PreviewController.cpp GaitGenerator.cpp ../SequencePlayer/interpolator.cpp)
 target_link_libraries(testGaitGenerator ${libs})
 set_target_properties(testGaitGenerator PROPERTIES COMPILE_DEFINITIONS "FOR_TESTGAITGENERATOR=1")
 

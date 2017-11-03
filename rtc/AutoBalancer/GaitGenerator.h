@@ -2,6 +2,7 @@
 #ifndef GAITGENERATOR_H
 #define GAITGENERATOR_H
 #include "PreviewController.h"
+#include "FootGuidedController.h"
 #include "../ImpedanceController/RatsMatrix.h"
 #include "interpolator.h"
 #include <vector>
@@ -1064,6 +1065,7 @@ namespace rats
     /* preview controller parameters */
     //preview_dynamics_filter<preview_control>* preview_controller_ptr;
     preview_dynamics_filter<extended_preview_control>* preview_controller_ptr;
+    foot_guided_controller<3>* foot_guided_controller_ptr;
 
     void append_go_pos_step_nodes (const coordinates& _ref_coords,
                                    const std::vector<leg_type>& lts)
@@ -1112,7 +1114,7 @@ namespace rats
         finalize_count(0), optional_go_pos_finalize_footstep_num(0), overwrite_footstep_index(0), overwritable_footstep_index_offset(1),
         velocity_mode_flg(VEL_IDLING), emergency_flg(IDLING), margin_time_ratio(0.01), footstep_modification_gain(5e-6),
         use_inside_step_limitation(true), use_stride_limitation(false), modify_footsteps(false), default_stride_limitation_type(SQUARE),
-        preview_controller_ptr(NULL) {
+        preview_controller_ptr(NULL), foot_guided_controller_ptr(NULL) {
         swing_foot_zmp_offsets = boost::assign::list_of<hrp::Vector3>(hrp::Vector3::Zero());
         prev_que_sfzos = boost::assign::list_of<hrp::Vector3>(hrp::Vector3::Zero());
         leg_type_map = boost::assign::map_list_of<leg_type, std::string>(RLEG, "rleg")(LLEG, "lleg")(RARM, "rarm")(LARM, "larm");
@@ -1127,6 +1129,11 @@ namespace rats
         delete preview_controller_ptr;
         preview_controller_ptr = NULL;
       }
+      if ( foot_guided_controller_ptr != NULL ) {
+        delete foot_guided_controller_ptr;
+        foot_guided_controller_ptr = NULL;
+      }
+
     };
     void initialize_gait_parameter (const hrp::Vector3& cog,
                                     const std::vector<step_node>& initial_support_leg_steps,

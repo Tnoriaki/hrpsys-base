@@ -86,8 +86,8 @@ int main(int argc, char* argv[])
           }
       }
       hrp::Vector3 ref_dcm = ref_dcm_list.front();
-      fgx.update_x_k(remain_t, ref_dcm[0], ref_dcm[0], refzmp[0]);
-      fgy.update_x_k(remain_t, ref_dcm[1], refzmp[1]);
+      fgx.update_x_k(round(remain_t / dt), ref_dcm[0], refzmp[0]);
+      fgy.update_x_k(round(remain_t / dt), ref_dcm[1], refzmp[1]);
       ref_dcm_list.pop();
       double pos[2];
       double zmp[2];
@@ -112,28 +112,6 @@ int main(int argc, char* argv[])
     if (!ref_zmp_list.empty()) ref_zmp_list.pop();
   }
   fclose(fp);
-  // plot controller gain with matplotlib
-  std::vector<double> tm;
-  std::vector<double> fgain_pc, fgain_epc, hgain, hgain_for_zmp;
-  size_t delay(pc.get_delay());
-  for (size_t i = 0; i < delay; i ++){
-    tm.push_back(i * dt);
-    fgain_pc.push_back(pc.get_preview_f(i));
-    fgain_epc.push_back(df.get_preview_f(i));
-    hgain.push_back(fgx.get_hgain(i));
-    hgain_for_zmp.push_back(fgx.get_refzmp_gain(i));
-  }
-  plt::named_plot("fgain (pc)", tm, fgain_pc, "o-");
-  plt::named_plot("fgain (epc)", tm, fgain_epc, "o-");
-  plt::named_plot("refDCM gain (fgc)", tm, hgain, "o-");
-  plt::named_plot("current DCM error gain (fgc)", tm, hgain_for_zmp, "o-");
-  plt::xlabel("preview time [s]");
-  plt::ylabel("gain");
-  plt::grid(true);
-  plt::legend();
-  plt::show();
-  // plot trajectory with gnuplot
-  if (use_gnuplot) {
   FILE* gp[3];
   std::string titles[2] = {"X", "Y"};
   for (size_t ii = 0; ii < 2; ii++) {
@@ -143,12 +121,11 @@ int main(int argc, char* argv[])
     fprintf(gp[ii], "replot \"%s\" using 1:%zu with lines title \"cog\"\n", fname.c_str(), ( ii * 5 + 3));
     fprintf(gp[ii], "replot \"%s\" using 1:%zu with lines title \"refzmp\"\n", fname.c_str(), ( ii * 5 + 4));
     fprintf(gp[ii], "replot \"%s\" using 1:%zu with lines title \"cog of foot guided control\"\n", fname.c_str(), ( ii * 5 + 5));
-fprintf(gp[ii], "replot \"%s\" using 1:%zu with lines title \"zmp of foot guided control\"\n", fname.c_str(), ( ii * 5 + 6));
+    fprintf(gp[ii], "replot \"%s\" using 1:%zu with lines title \"zmp of foot guided control\"\n", fname.c_str(), ( ii * 5 + 6));
     fflush(gp[ii]);
   }
   double tmp;
   std::cin >> tmp;
   for (size_t j = 0; j < 2; j++) pclose(gp[j]);
-  }
   return 0;
 }

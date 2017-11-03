@@ -625,6 +625,11 @@ namespace rats
     // rg+lcg initialization
     rg.reset(one_step_len);
     rg.push_refzmp_from_footstep_nodes_for_dual(footstep_nodes_list.front(), initial_support_leg_steps, initial_swing_leg_dst_steps);
+    if ( foot_guided_controller_ptr != NULL ) {
+      delete foot_guided_controller_ptr;
+      foot_guided_controller_ptr = NULL;
+    }
+    foot_guided_controller_ptr = new foot_guided_controller<3>(dt, cog(2) - rg.get_refzmp_cur()(2), rg.get_refzmp_cur(), gravitational_acceleration);
     if ( preview_controller_ptr != NULL ) {
       delete preview_controller_ptr;
       preview_controller_ptr = NULL;
@@ -709,6 +714,35 @@ namespace rats
     }
     // modify footsteps based on diff_cp
     if(modify_footsteps) modify_footsteps_for_recovery();
+
+    // set param
+    solved = true;
+    size_t remain_count(lcg.get_lcg_count()), ending_count(footstep_nodes_list[lcg.get_footstep_index()].front().step_time/dt);
+    hrp::Vector3 dz = hrp::Vector3(0, 0, foot_guided_controller_ptr->get_dz());
+    hrp::Vector3 vrp, ref_vrp(dz), ref_dcm(dz);
+    std::vector<step_node> cur_steps(lcg.get_support_leg_steps()), dist_steps(lcg.get_swing_leg_dst_steps());
+    // decide ref vrp and ref dcm and remain_count
+    for ( std::vector<step_node>::iterator it = cur_steps.begin(); it != cur_steps.end(); it++ )
+        ref_vrp += (it->worldcoords.pos + it->worldcoords.rot * rg.get_default_zmp_offset(it->l_r)) / cur_steps.size();
+    for ( std::vector<step_node>::iterator it = dist_steps.begin(); it != dist_steps.end(); it++ )
+        ref_dcm += (it->worldcoords.pos + it->worldcoords.rot * rg.get_default_zmp_offset(it->l_r)) / dist_steps.size();
+    if ( lcg.get_footstep_index() == 0 ) { // first double support phase
+        ref_vrp = ( ref_vrp + ref_dcm ) / 2.0;
+    } else if ( lcg.get_footstep_index() == footstep_nodes_list.size() - 2 ) { // second last phase
+        ref_dcm = ( ref_vrp + ref_dcm ) / 2.0;
+    } else if ( lcg.get_footstep_index() == footstep_nodes_list.size() - 1 ) { // last double support phase
+        ref_vrp = ref_dcm = ( ref_vrp + ref_dcm ) / 2.0;
+        if ( ending_count > finalize_count + 1 ) {
+            finalize_count++;
+            remain_count = ending_count - finalize_count;
+        } else {
+            solved = false;
+            remain_count = 1;
+        }
+    }
+    // calc vrp (refzmp) and cog
+    foot_guided_controller_ptr->update(vrp, cog, remain_count, ref_dcm, ref_vrp, true);
+    refzmp = vrp - dz;
 
     if ( !solved ) {
       hrp::Vector3 rzmp;

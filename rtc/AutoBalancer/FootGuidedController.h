@@ -4,51 +4,93 @@
 #include <iostream>
 #include <cmath>
 #include <hrpUtil/Eigen3d.h>
-// #include "hrpsys/util/Hrpsys.h"
-#include "PreviewController.h"
+#include "hrpsys/util/Hrpsys.h"
 
-namespace rats
+static const double DEFAULT_GRAVITATIONAL_ACCELERATION = 9.80665; // [m/s^2]
+
+class foot_guided_control_base
 {
-  class foot_guided_control_base
-  {
-  private:
-    void calc_u(const double remain_t, const double ref_dcm, const double ref_zmp);
-    void calc_u(const double remain_t, const double ref_dcm, const double ref_ccm, const double ref_zmp);
+private:
+    void calc_u(const std::size_t N, const double ref_dcm, const double ref_vrp);
     void calc_x_k();
-    void calc_hgain_list(const std::size_t N);
-    void calc_refzmp_gain_list(const std::size_t N);
-    double calc_hgain(const std::size_t N);
-  protected:
+protected:
     Eigen::Matrix<double, 2, 2> A; // state matrix
     Eigen::Matrix<double, 2, 1> b; // input matrix
     Eigen::Matrix<double, 2, 2> Phi; // convert matrix : pos, vel => dcm, ccm
     Eigen::Matrix<double, 2, 2> Phi_inv; // convert matrix : dcm, ccm => pos, vel
     Eigen::Matrix<double, 2, 1> x_k; // pos, vel
     Eigen::Matrix<double, 2, 1> w_k; // dcm, ccm
-    hrp::dvector hgain_list; // hgain_list
-    hrp::dvector refzmp_gain_list; // refzmp_gain_list (const)
     double u_k; // zmp
-    double dt, g, t_max;
+    double w_k_offset; // dcm offset
+    double dt, g;
     double dz, xi, h, h_;
-    size_t N_max;
-  public:
+public:
+    // constructor
+    foot_guided_control_base() {}
     foot_guided_control_base(const double _dt,  const double _dz,
-                             const double _g = DEFAULT_GRAVITATIONAL_ACCELERATION,
-                             const double _t_max = 1.6)
-      : dt(_dt), g(_g), t_max(_t_max), N_max(round(t_max / dt)),
-        x_k(Eigen::Matrix<double, 2, 1>::Zero()), u_k(0.0)
+                             const double _g = DEFAULT_GRAVITATIONAL_ACCELERATION)
+        : dt(_dt), dz(_dz), g(_g),
+          x_k(Eigen::Matrix<double, 2, 1>::Zero()), u_k(0.0), w_k_offset(0.0)
     {
-      set_param(_dz, N_max);
+        set_mat(dz);
     }
-    void update_x_k(const double remain_t, const double ref_dcm, const double ref_zmp);
-    void update_x_k(const double remain_t, const double ref_dcm, const double ref_ccm, const double ref_zmp);
-    void set_param(const double _dz, const size_t N_max);
+    foot_guided_control_base(const double _dt,  const double _dz, const double init_xk,
+                             const double _g = DEFAULT_GRAVITATIONAL_ACCELERATION)
+        : dt(_dt), dz(_dz), g(_g),
+          x_k(Eigen::Matrix<double, 2, 1>::Zero()), u_k(0.0), w_k_offset(0.0)
+    {
+        set_mat(dz);
+        x_k(0) = init_xk;
+    }
+    // destructor
+    ~foot_guided_control_base() {};
+    // update function
+    void update_x_k(const std::size_t N, const double ref_dcm, const double ref_vrp);
+    // set function
+    void set_mat(const double dz);
+    void set_pos (const double x) { x_k(0) = x; }
+    void set_offset (const double offset) { w_k_offset = offset; }
+    // get_function
     void get_pos (double& ret) { ret = x_k(0); }
     void get_vel (double& ret) { ret = x_k(1); }
     void get_zmp (double& ret) { ret = u_k; }
-    double get_hgain(size_t i) { return hgain_list(i); }
-    double get_refzmp_gain(size_t i) { return refzmp_gain_list(i); }
     double get_xi() { return xi; }
-  };
-}
+    double get_dz() { return dz; }
+};
+
+template <std::size_t dim>
+class foot_guided_controller
+{
+private:
+    foot_guided_control_base *controllers;
+protected:
+public:
+    // constructor
+    foot_guided_controller(const double _dt,  const double _dz, const hrp::Vector3& init_xk,
+                        const double _g = DEFAULT_GRAVITATIONAL_ACCELERATION)
+    {
+        controllers = new foot_guided_control_base[dim];
+        for (size_t i = 0; i < dim; i++) controllers[i] = foot_guided_control_base(_dt, _dz, init_xk[i], _g);
+    }
+    // destructor
+    ~foot_guided_controller()
+    {
+        delete[] controllers;
+    };
+    // update function
+    void update(hrp::Vector3& p_ret, hrp::Vector3& x_ret, const std::size_t N, const hrp::Vector3& ref_dcm, const hrp::Vector3& ref_vrp, const bool updatep){
+        for (size_t i = 0; i < dim; i++) {
+            controllers[i].update_x_k(N, ref_dcm[i], ref_vrp[i]);
+            controllers[i].get_zmp(p_ret[i]);
+            controllers[i].get_pos(x_ret[i]);
+        }
+    };
+    // set function
+    void set_offset(const hrp::Vector3& offset) {
+        for (size_t i = 0; i < dim; i++)
+            controllers[i].set_offset(offset[i]);
+    }
+    // get function
+    double get_dz() { return controllers[0].get_dz(); }
+};
 #endif /*FOOT_H_*/
