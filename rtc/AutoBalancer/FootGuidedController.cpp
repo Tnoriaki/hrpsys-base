@@ -24,13 +24,13 @@ void foot_guided_control_base::set_mat(const double dz)
 
 void foot_guided_control_base::calc_u(const std::size_t N, const double ref_dcm, const double ref_vrp)
 {
-    if ( N == 0 ) {
-        u_k = 0;
-    } else {
+    if ( N > 0 ) {
         double hn = std::pow(h, N);
         double hgain =  (hn / h) * (1 + h) / ( 1 - hn * hn );
         w_k = Phi * x_k;
         u_k = ref_vrp - hgain * (hn * (w_k(0) - ref_vrp + w_k_offset) - (ref_dcm - ref_vrp));
+    } else {
+        u_k = ref_vrp;
     }
 }
 
