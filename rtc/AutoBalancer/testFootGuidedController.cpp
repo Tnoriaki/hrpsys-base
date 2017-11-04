@@ -86,15 +86,11 @@ int main(int argc, char* argv[])
           }
       }
       hrp::Vector3 ref_dcm = ref_dcm_list.front();
-      fgx.update_x_k(round(remain_t / dt), ref_dcm[0], refzmp[0]);
-      fgy.update_x_k(round(remain_t / dt), ref_dcm[1], refzmp[1]);
-      ref_dcm_list.pop();
       double pos[2];
       double zmp[2];
-      fgx.get_pos(pos[0]);
-      fgx.get_zmp(zmp[0]);
-      fgy.get_pos(pos[1]);
-      fgy.get_zmp(zmp[1]);
+      fgx.update(zmp[0], pos[0], round(remain_t / dt), ref_dcm[0], refzmp[0]);
+      fgy.update(zmp[1], pos[1], round(remain_t / dt), ref_dcm[1], refzmp[1]);
+      ref_dcm_list.pop();
       fprintf(fp, "%f %f %f %f %f %f %f %f %f %f %f\n",
               tm_list[index],
               cart_zmp[0], /* zmpx ;; this zmp is "zmp as a table-cart model" */

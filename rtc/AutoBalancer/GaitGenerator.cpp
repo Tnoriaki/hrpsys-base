@@ -715,60 +715,9 @@ namespace rats
     // modify footsteps based on diff_cp
     if(modify_footsteps) modify_footsteps_for_recovery();
 
-    // set param
-    solved = true;
-    size_t remain_count(lcg.get_lcg_count()), ending_count(footstep_nodes_list[lcg.get_footstep_index()].front().step_time/dt);
-    hrp::Vector3 dz = hrp::Vector3(0, 0, foot_guided_controller_ptr->get_dz());
-    hrp::Vector3 vrp, ref_vrp(dz), ref_dcm(dz);
-    std::vector<step_node> cur_steps(lcg.get_support_leg_steps()), dist_steps(lcg.get_swing_leg_dst_steps());
-    // decide ref vrp and ref dcm and remain_count
-    for ( std::vector<step_node>::iterator it = cur_steps.begin(); it != cur_steps.end(); it++ )
-        ref_vrp += (it->worldcoords.pos + it->worldcoords.rot * rg.get_default_zmp_offset(it->l_r)) / cur_steps.size();
-    for ( std::vector<step_node>::iterator it = dist_steps.begin(); it != dist_steps.end(); it++ )
-        ref_dcm += (it->worldcoords.pos + it->worldcoords.rot * rg.get_default_zmp_offset(it->l_r)) / dist_steps.size();
-    if ( lcg.get_footstep_index() == 0 ) { // first double support phase
-        ref_vrp = ( ref_vrp + ref_dcm ) / 2.0;
-    } else if ( lcg.get_footstep_index() == footstep_nodes_list.size() - 2 ) { // second last phase
-        ref_dcm = ( ref_vrp + ref_dcm ) / 2.0;
-    } else if ( lcg.get_footstep_index() == footstep_nodes_list.size() - 1 ) { // last double support phase
-        ref_vrp = ref_dcm = ( ref_vrp + ref_dcm ) / 2.0;
-        if ( ending_count > finalize_count + 1 ) {
-            finalize_count++;
-            remain_count = ending_count - finalize_count;
-        } else {
-            solved = false;
-            remain_count = 1;
-        }
-    }
-    // calc vrp (refzmp) and cog
-    foot_guided_controller_ptr->update(vrp, cog, remain_count, ref_dcm, ref_vrp, true);
-    refzmp = vrp - dz;
-
-    if ( !solved ) {
-      hrp::Vector3 rzmp;
-      std::vector<hrp::Vector3> sfzos;
-      bool refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after);
-      if (!refzmp_exist_p) {
-        finalize_count++;
-        rzmp = prev_que_rzmp;
-        sfzos = prev_que_sfzos;
-      } else {
-        prev_que_rzmp = rzmp;
-        prev_que_sfzos = sfzos;
-      }
-      solved = preview_controller_ptr->update(refzmp, cog, swing_foot_zmp_offsets, rzmp, sfzos, (refzmp_exist_p || finalize_count < preview_controller_ptr->get_delay()-default_step_time/dt));
-    }
-
+    update_foot_guided_controller(solved);
+    // update_preview_controller(solved);
     rg.update_refzmp();
-    // { // debug
-    //   double cart_zmp[3];
-    //   preview_controller_ptr->get_cart_zmp(cart_zmp);
-    //   std::cerr << "(list " << std::endl;
-    //   std::cerr << ":cog "; print_vector(std::cerr, cog);
-    //   std::cerr << ":refzmp "; print_vector(std::cerr, refzmp);
-    //   std::cerr << ":cart-zmp "; print_vector(std::cerr, cart_zmp, 3);
-    //   std::cerr << ")" << std::endl;
-    // }
 
     /* update swing_leg_coords, support_leg_coords */
     if ( solved ) {
@@ -778,6 +727,68 @@ namespace rats
     }
     return solved;
   };
+
+  void gait_generator::update_preview_controller (bool& solved)
+  {
+      if ( !solved ) {
+          hrp::Vector3 rzmp;
+          std::vector<hrp::Vector3> sfzos;
+          bool refzmp_exist_p = rg.get_current_refzmp(rzmp, sfzos, default_double_support_ratio_before, default_double_support_ratio_after, default_double_support_static_ratio_before, default_double_support_static_ratio_after);
+          if (!refzmp_exist_p) {
+              finalize_count++;
+              rzmp = prev_que_rzmp;
+              sfzos = prev_que_sfzos;
+          } else {
+              prev_que_rzmp = rzmp;
+              prev_que_sfzos = sfzos;
+          }
+          solved = preview_controller_ptr->update(refzmp, cog, swing_foot_zmp_offsets, rzmp, sfzos, (refzmp_exist_p || finalize_count < preview_controller_ptr->get_delay()-default_step_time/dt));
+      }
+      // { // debug
+      //   double cart_zmp[3];
+      //   preview_controller_ptr->get_cart_zmp(cart_zmp);
+      //   std::cerr << "(list " << std::endl;
+      //   std::cerr << ":cog "; print_vector(std::cerr, cog);
+      //   std::cerr << ":refzmp "; print_vector(std::cerr, refzmp);
+      //   std::cerr << ":cart-zmp "; print_vector(std::cerr, cart_zmp, 3);
+      //   std::cerr << ")" << std::endl;
+      // }
+  }
+
+  void gait_generator::update_foot_guided_controller (bool& solved)
+  {
+      // set param
+      solved = true;
+      size_t remain_count(lcg.get_lcg_count()), ending_count(footstep_nodes_list[lcg.get_footstep_index()].front().step_time/dt);
+      hrp::Vector3 dz = hrp::Vector3(0, 0, foot_guided_controller_ptr->get_dz());
+      hrp::Vector3 vrp, ref_vrp(dz), ref_dcm(dz);
+      std::vector<step_node> cur_steps(lcg.get_support_leg_steps()), dist_steps(lcg.get_swing_leg_dst_steps());
+      // decide ref vrp and ref dcm and remain_count
+      for ( std::vector<step_node>::iterator it = cur_steps.begin(); it != cur_steps.end(); it++ )
+          ref_vrp += (it->worldcoords.pos + it->worldcoords.rot * rg.get_default_zmp_offset(it->l_r)) / cur_steps.size();
+      for ( std::vector<step_node>::iterator it = dist_steps.begin(); it != dist_steps.end(); it++ )
+          ref_dcm += (it->worldcoords.pos + it->worldcoords.rot * rg.get_default_zmp_offset(it->l_r)) / dist_steps.size();
+      if ( lcg.get_footstep_index() == 0 ) { // first double support phase
+          ref_vrp = ( ref_vrp + ref_dcm ) / 2.0;
+      } else if ( lcg.get_footstep_index() == footstep_nodes_list.size() - 2 ) { // second last phase
+          ref_dcm = ( ref_vrp + ref_dcm ) / 2.0;
+      } else if ( lcg.get_footstep_index() == footstep_nodes_list.size() - 1 ) { // last double support phase
+          ref_vrp = ref_dcm = ( ref_vrp + ref_dcm ) / 2.0;
+          if ( ending_count > finalize_count + 1 ) {
+              finalize_count++;
+              remain_count = ending_count - finalize_count;
+          } else {
+              solved = false;
+              remain_count = 1;
+          }
+      }
+      // calc vrp (refzmp) and cog
+      // foot_guided_controller_ptr->update(vrp, cog, remain_count, ref_dcm, ref_vrp, true);
+      foot_guided_controller_ptr->update_control(vrp, remain_count, ref_dcm, ref_vrp);
+      foot_guided_controller_ptr->update_state(cog);
+      // convert vrp -> refzmp
+      refzmp = vrp - dz;
+  }
 
   void gait_generator::limit_stride (step_node& cur_fs, const step_node& prev_fs, const double (&limit)[5]) const
   {

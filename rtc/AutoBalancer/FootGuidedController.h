@@ -45,7 +45,9 @@ public:
     // destructor
     ~foot_guided_control_base() {};
     // update function
-    void update_x_k(const std::size_t N, const double ref_dcm, const double ref_vrp);
+    void update_control(double& vrp, const std::size_t N, const double ref_dcm, const double ref_vrp);
+    void update_state(double& pos);
+    void update(double& vrp, double& pos, const std::size_t N, const double ref_dcm, const double ref_vrp);
     // set function
     void set_mat(const double dz);
     void set_pos (const double x) { x_k(0) = x; }
@@ -78,15 +80,24 @@ public:
         delete[] controllers;
     };
     // update function
-    void update(hrp::Vector3& p_ret, hrp::Vector3& x_ret, const std::size_t N, const hrp::Vector3& ref_dcm, const hrp::Vector3& ref_vrp, const bool updatep){
-        for (size_t i = 0; i < dim; i++) {
-            controllers[i].update_x_k(N, ref_dcm[i], ref_vrp[i]);
-            controllers[i].get_zmp(p_ret[i]);
-            controllers[i].get_pos(x_ret[i]);
-        }
-    };
+    void update_control(hrp::Vector3& p_ret, const std::size_t N, const hrp::Vector3& ref_dcm, const hrp::Vector3& ref_vrp)
+    {
+        for (size_t i = 0; i < dim; i++)
+            controllers[i].update_control(p_ret[i], N, ref_dcm[i], ref_vrp[i]);
+    }
+    void update_state(hrp::Vector3& x_ret)
+    {
+        for (size_t i = 0; i < dim; i++)
+            controllers[i].update_state(x_ret[i]);
+    }
+    void update(hrp::Vector3& p_ret, hrp::Vector3& x_ret, const std::size_t N, const hrp::Vector3& ref_dcm, const hrp::Vector3& ref_vrp)
+    {
+        for (size_t i = 0; i < dim; i++)
+            controllers[i].update(p_ret[i], x_ret[i], N, ref_dcm[i], ref_vrp[i]);
+    }
     // set function
-    void set_offset(const hrp::Vector3& offset) {
+    void set_offset(const hrp::Vector3& offset)
+    {
         for (size_t i = 0; i < dim; i++)
             controllers[i].set_offset(offset[i]);
     }

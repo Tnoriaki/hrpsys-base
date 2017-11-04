@@ -40,8 +40,20 @@ void foot_guided_control_base::calc_x_k()
     x_k = A * x_k + b * u_k;
 }
 
-void foot_guided_control_base::update_x_k(const std::size_t N, const double ref_dcm, const double ref_vrp)
+void foot_guided_control_base::update_control(double& vrp, const std::size_t N, const double ref_dcm, const double ref_vrp)
 {
     calc_u(N, ref_dcm, ref_vrp);
+    vrp = u_k;
+}
+
+void foot_guided_control_base::update_state(double& pos)
+{
     calc_x_k();
+    pos = x_k(0);
+}
+
+void foot_guided_control_base::update(double& vrp, double& pos, const std::size_t N, const double ref_dcm, const double ref_vrp)
+{
+    update_control(vrp, N, ref_dcm, ref_vrp);
+    update_state(pos);
 }
