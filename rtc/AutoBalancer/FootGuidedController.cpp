@@ -32,6 +32,17 @@ void foot_guided_control_base::calc_u(const std::size_t N, const double ref_dcm,
     } else {
         u_k = ref_vrp;
     }
+    truncate_u();
+}
+
+void foot_guided_control_base::truncate_u()
+{
+    double acc;
+    get_acc(acc);
+    if (std::abs(acc) > mu * g) {
+        acc = mu * g * sgn(acc);
+        u_k = x_k(0) - acc / (xi * xi);
+    }
 }
 
 // assumed after calc_u

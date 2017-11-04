@@ -8,10 +8,15 @@
 
 static const double DEFAULT_GRAVITATIONAL_ACCELERATION = 9.80665; // [m/s^2]
 
+template <typename T> int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
+}
+
 class foot_guided_control_base
 {
 private:
     void calc_u(const std::size_t N, const double ref_dcm, const double ref_vrp);
+    void truncate_u();
     void calc_x_k();
 protected:
     Eigen::Matrix<double, 2, 2> A; // state matrix
@@ -22,6 +27,7 @@ protected:
     Eigen::Matrix<double, 2, 1> w_k; // dcm, ccm
     double u_k; // zmp
     double w_k_offset; // dcm offset
+    double mu; // friction coefficient
     double dt, g;
     double dz, xi, h, h_;
 public:
@@ -30,14 +36,14 @@ public:
     foot_guided_control_base(const double _dt,  const double _dz,
                              const double _g = DEFAULT_GRAVITATIONAL_ACCELERATION)
         : dt(_dt), dz(_dz), g(_g),
-          x_k(Eigen::Matrix<double, 2, 1>::Zero()), u_k(0.0), w_k_offset(0.0)
+          x_k(Eigen::Matrix<double, 2, 1>::Zero()), u_k(0.0), w_k_offset(0.0), mu(0.5)
     {
         set_mat(dz);
     }
     foot_guided_control_base(const double _dt,  const double _dz, const double init_xk,
                              const double _g = DEFAULT_GRAVITATIONAL_ACCELERATION)
         : dt(_dt), dz(_dz), g(_g),
-          x_k(Eigen::Matrix<double, 2, 1>::Zero()), u_k(0.0), w_k_offset(0.0)
+          x_k(Eigen::Matrix<double, 2, 1>::Zero()), u_k(0.0), w_k_offset(0.0), mu(0.5)
     {
         set_mat(dz);
         x_k(0) = init_xk;
@@ -51,12 +57,13 @@ public:
     // set function
     void set_mat(const double dz);
     void set_pos (const double x) { x_k(0) = x; }
+    void set_vrp (const double u) { u_k = u; }
     void set_offset (const double offset) { w_k_offset = offset; }
     // get_function
     void get_pos (double& ret) { ret = x_k(0); }
     void get_vel (double& ret) { ret = x_k(1); }
     void get_acc (double& ret) { ret = xi * xi * ( x_k(0) - u_k ); }
-    void get_zmp (double& ret) { ret = u_k; }
+    void get_vrp (double& ret) { ret = u_k; }
     double get_xi() { return xi; }
     double get_dz() { return dz; }
 };
