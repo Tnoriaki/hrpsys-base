@@ -55,6 +55,7 @@ public:
     // get_function
     void get_pos (double& ret) { ret = x_k(0); }
     void get_vel (double& ret) { ret = x_k(1); }
+    void get_acc (double& ret) { ret = xi * xi * ( x_k(0) - u_k ); }
     void get_zmp (double& ret) { ret = u_k; }
     double get_xi() { return xi; }
     double get_dz() { return dz; }
@@ -103,5 +104,9 @@ public:
     }
     // get function
     double get_dz() { return controllers[0].get_dz(); }
+    void get_acc(hrp::Vector3& ret) {
+        for (size_t i = 0; i < dim; i++)
+            controllers[i].get_acc(ret[i]);
+    }
 };
 #endif /*FOOT_H_*/
